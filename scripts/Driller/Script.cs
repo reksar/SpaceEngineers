@@ -16,35 +16,30 @@ public sealed class Program : MyGridProgram
 {
     // INGAME SCRIPT START
 
-    public enum State
+    enum State
     {
-        ROTATE_BACKWARD = -1,
-        IDLE = 0,
-        ROTATE_FORWARD = 1
+        RotateBackward = -1,
+        Idle = 0,
+        RotateForward = 1
     };
-    private State state;
+    State state;
 
     delegate void StateProcess(string argument, UpdateType updateSource);
-    private StateProcess currentStateProcess;
+    StateProcess currentStateProcess;
 
-    private IMyMotorAdvancedStator rotorR;
-    private IMyMotorAdvancedStator rotorL;
+    IMyMotorAdvancedStator rotorR;
+    IMyMotorAdvancedStator rotorL;
 
-    public const int PI_DEGREES = 180;
-    public const float RADIANS_IN_CIRCLE = 2 * (float)Math.PI;
-    public const int ROTATION_CALIBER_DEG = 5;
-    public const float ROTATION_VELOCITY = 0.20F; // Rad/s
+    const int PIDegrees = 180;
+    const float RadiansInCircle = 2 * (float)Math.PI;
+    const int RotationCaliberDegrees = 5;
+    const float RotationVelocity = 0.20F; // Rad/s
 
     public Program()
     {
         rotorR = GridTerminalSystem.GetBlockWithName("DrillRotorR") as IMyMotorAdvancedStator;
         rotorL = GridTerminalSystem.GetBlockWithName("DrillRotorL") as IMyMotorAdvancedStator;
         ChangeState_Idle();
-    }
-
-    public void Save()
-    {
-
     }
 
     public void Main(string argument, UpdateType updateSource)
@@ -54,7 +49,7 @@ public sealed class Program : MyGridProgram
 
     // State
 
-    private void StateIdle(string argument, UpdateType updateSource)
+    void StateIdle(string argument, UpdateType updateSource)
     {
         if ((updateSource == UpdateType.Trigger) || (updateSource == UpdateType.Terminal))
         {
@@ -74,7 +69,7 @@ public sealed class Program : MyGridProgram
         }
     }
 
-    private void StateRotateForward(string argument, UpdateType updateSource)
+    void StateRotateForward(string argument, UpdateType updateSource)
     {
         if (rotorR.Angle >= rotorR.UpperLimitRad)
         {
@@ -82,7 +77,7 @@ public sealed class Program : MyGridProgram
         }
     }
 
-    private void StateRotateBackward(string argument, UpdateType updateSource)
+    void StateRotateBackward(string argument, UpdateType updateSource)
     {
         if (rotorR.Angle <= rotorR.LowerLimitRad)
         {
@@ -92,39 +87,39 @@ public sealed class Program : MyGridProgram
 
     // SetState
 
-    private void SetStateIdle()
+    void SetStateIdle()
     {
-        state = State.IDLE;
+        state = State.Idle;
         currentStateProcess = StateIdle;
     }
 
-    private void SetStateRotateForward()
+    void SetStateRotateForward()
     {
-        state = State.ROTATE_FORWARD;
+        state = State.RotateForward;
         currentStateProcess = StateRotateForward;
     }
 
-    private void SetStateRotateBackward()
+    void SetStateRotateBackward()
     {
-        state = State.ROTATE_BACKWARD;
+        state = State.RotateBackward;
         currentStateProcess = StateRotateBackward;
     }
 
     // ChangeState
 
-    private void ChangeState_Idle_RotateForward()
+    void ChangeState_Idle_RotateForward()
     {
         SetStateRotateForward();
         EnterStateRotate();
     }
 
-    private void ChangeState_Idle_RotateBackward()
+    void ChangeState_Idle_RotateBackward()
     {
         SetStateRotateBackward();
         EnterStateRotate();
     }
 
-    private void ChangeState_Idle()
+    void ChangeState_Idle()
     {
         StopRotors();
         Runtime.UpdateFrequency = UpdateFrequency.None;
@@ -133,7 +128,7 @@ public sealed class Program : MyGridProgram
 
     // EnterState
 
-    private void EnterStateRotate()
+    void EnterStateRotate()
     {
         RotateRotors();
         Runtime.UpdateFrequency = UpdateFrequency.Update10;
@@ -141,7 +136,7 @@ public sealed class Program : MyGridProgram
 
     // Other
 
-    private void StopRotors()
+    void StopRotors()
     {
         rotorR.RotorLock = true;
         rotorL.RotorLock = true;
@@ -149,28 +144,28 @@ public sealed class Program : MyGridProgram
         rotorL.TargetVelocityRad = 0;
     }
 
-    private void RotateRotors()
+    void RotateRotors()
     {
         SetUpRotorR();
         rotorR.RotorLock = false;
     }
 
-    private void SetUpRotorR()
+    void SetUpRotorR()
     {
         float rotationAngle = CalcRotationAngleR();
         SetLimitsRotorR(rotationAngle);
         SetSpeedRotorR();
     }
 
-    private float CalcRotationAngleR()
+    float CalcRotationAngleR()
     {
-        int rotationAngleDeg = ROTATION_CALIBER_DEG;
+        int rotationAngleDeg = RotationCaliberDegrees;
         int aberranceDeg = CalcAberranceDeg();
         if (aberranceDeg != 0)
         {
-            if (state == State.ROTATE_FORWARD)
+            if (state == State.RotateForward)
             {
-                rotationAngleDeg = ROTATION_CALIBER_DEG - aberranceDeg;
+                rotationAngleDeg = RotationCaliberDegrees - aberranceDeg;
             }
             else
             {
@@ -180,18 +175,18 @@ public sealed class Program : MyGridProgram
         return ToRadians(rotationAngleDeg);
     }
 
-    private int CalcAberranceDeg()
+    int CalcAberranceDeg()
     {
-        return ToDegrees(rotorR.Angle) % ROTATION_CALIBER_DEG;
+        return ToDegrees(rotorR.Angle) % RotationCaliberDegrees;
     }
 
-    private void SetLimitsRotorR(float rotationAngle)
+    void SetLimitsRotorR(float rotationAngle)
     {
         float newAngle = Math.Abs(rotorR.Angle + (int)state * rotationAngle);
 
-        if (newAngle > RADIANS_IN_CIRCLE)
+        if (newAngle > RadiansInCircle)
         {
-            newAngle -= RADIANS_IN_CIRCLE;
+            newAngle -= RadiansInCircle;
         }
 
         if (newAngle > rotorR.Angle)
@@ -204,27 +199,27 @@ public sealed class Program : MyGridProgram
         }
     }
 
-    private void SetSpeedRotorR()
+    void SetSpeedRotorR()
     {
-        rotorR.TargetVelocityRad = (int)state * ROTATION_VELOCITY;
+        rotorR.TargetVelocityRad = (int)state * RotationVelocity;
     }
 
-    private void SetRotorLimits(IMyMotorAdvancedStator rotor, float minAngle, float maxAngle)
+    void SetRotorLimits(IMyMotorAdvancedStator rotor, float minAngle, float maxAngle)
     {
         rotor.LowerLimitRad = minAngle;
         rotor.UpperLimitRad = maxAngle;
     }
 
-    public int ToDegrees(float radians)
+    int ToDegrees(float radians)
     {
-        const float DEGREES_IN_RADIAN = (float)Math.PI / PI_DEGREES;
-        float degrees = DEGREES_IN_RADIAN * radians;
+        const float DegreesInRadian = (float)Math.PI / PIDegrees;
+        float degrees = DegreesInRadian * radians;
         return (int)Math.Round(degrees);
     }
 
-    public float ToRadians(int degrees)
+    float ToRadians(int degrees)
     {
-        return (degrees * (float)Math.PI) / PI_DEGREES;
+        return (degrees * (float)Math.PI) / PIDegrees;
     }
 
     // INGAME SCRIPT END
