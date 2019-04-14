@@ -16,6 +16,11 @@ public sealed class Program : MyGridProgram
 {
     // INGAME SCRIPT START
 
+    const int PIDegrees = 180;
+    const float RadiansInCircle = 2 * (float)Math.PI;
+    const int RotationCaliberDegrees = 5;
+    const float RotationVelocity = 0.20F; // Rad/s
+
     enum State
     {
         RotateBackward = -1,
@@ -30,28 +35,23 @@ public sealed class Program : MyGridProgram
     IMyMotorAdvancedStator rotorR;
     IMyMotorAdvancedStator rotorL;
 
-    const int PIDegrees = 180;
-    const float RadiansInCircle = 2 * (float)Math.PI;
-    const int RotationCaliberDegrees = 5;
-    const float RotationVelocity = 0.20F; // Rad/s
-
     public Program()
     {
-        rotorR = GridTerminalSystem.GetBlockWithName("DrillRotorR") as IMyMotorAdvancedStator;
-        rotorL = GridTerminalSystem.GetBlockWithName("DrillRotorL") as IMyMotorAdvancedStator;
+        rotorR = GetBlock<IMyMotorAdvancedStator>("DrillRotorR");
+        rotorL = GetBlock<IMyMotorAdvancedStator>("DrillRotorL");
         ChangeState_Idle();
     }
 
-    public void Main(string argument, UpdateType updateSource)
+    public void Main(string argument, UpdateType invoker)
     {
-        currentStateProcess(argument, updateSource);
+        currentStateProcess(argument, invoker);
     }
 
     // State
 
-    void StateIdle(string argument, UpdateType updateSource)
+    void StateIdle(string argument, UpdateType invoker)
     {
-        if ((updateSource == UpdateType.Trigger) || (updateSource == UpdateType.Terminal))
+        if (IsInvokedByUser(invoker))
         {
             switch (argument)
             {
@@ -208,6 +208,17 @@ public sealed class Program : MyGridProgram
     {
         rotor.LowerLimitRad = minAngle;
         rotor.UpperLimitRad = maxAngle;
+    }
+
+    T GetBlock<T>(string name)
+    {
+        return (T)GridTerminalSystem.GetBlockWithName(name);
+    }
+
+    bool IsInvokedByUser(UpdateType invoker)
+    {
+        return (invoker == UpdateType.Trigger)
+            || (invoker == UpdateType.Terminal);
     }
 
     int ToDegrees(float radians)
