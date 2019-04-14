@@ -71,7 +71,7 @@ public sealed class Program : MyGridProgram
 
     void StateRotateForward(string argument, UpdateType updateSource)
     {
-        if (rotorR.Angle >= rotorR.UpperLimitRad)
+        if (rotorR.UpperLimitRad <= rotorR.Angle)
         {
             ChangeState_Idle();
         }
@@ -183,20 +183,11 @@ public sealed class Program : MyGridProgram
     void SetLimitsRotorR(float rotationAngle)
     {
         float newAngle = Math.Abs(rotorR.Angle + (int)state * rotationAngle);
-
         if (newAngle > RadiansInCircle)
         {
             newAngle -= RadiansInCircle;
         }
-
-        if (newAngle > rotorR.Angle)
-        {
-            SetRotorLimits(rotorR, rotorR.Angle, newAngle);
-        }
-        else
-        {
-            SetRotorLimits(rotorR, newAngle, rotorR.Angle);
-        }
+        SetRotorLimits(rotorR, newAngle);
     }
 
     void SetSpeedRotorR()
@@ -204,10 +195,19 @@ public sealed class Program : MyGridProgram
         rotorR.TargetVelocityRad = (int)state * RotationVelocity;
     }
 
-    void SetRotorLimits(IMyMotorAdvancedStator rotor, float minAngle, float maxAngle)
+    void SetRotorLimits(IMyMotorAdvancedStator rotor, float newAngle)
     {
-        rotor.LowerLimitRad = minAngle;
-        rotor.UpperLimitRad = maxAngle;
+        float currentAngle = rotor.Angle;
+        if (currentAngle < newAngle)
+        {
+            rotor.LowerLimitRad = currentAngle;
+            rotor.UpperLimitRad = newAngle;
+        }
+        else
+        {
+            rotor.LowerLimitRad = newAngle;
+            rotor.UpperLimitRad = currentAngle;
+        }
     }
 
     T GetBlock<T>(string name)
