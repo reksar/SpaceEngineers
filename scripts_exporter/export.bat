@@ -5,7 +5,7 @@ REM scripts for Space Engineers game.
 REM Params:
 REM     %1 - Project name, or $(TargetName) in Visual Studio
 
-SET SOURCE_ROOT=E:\reksar\creation\SpaceEngineers\scripts
+SET SOURCES_ROOT=E:\reksar\creation\SpaceEngineers\scripts
 SET DESTINATION_ROOT=C:\Users\reksar\AppData\Roaming\SpaceEngineers\IngameScripts\local
 SET STRART_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT START/="
 SET END_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT END/="
@@ -17,7 +17,7 @@ IF [%project_name%] == [] (
     ECHO C# project name is not specified.
     EXIT /B 1
 )
-SET source_file=%SOURCE_ROOT%\%project_name%\%FILENAME%
+SET source_file=%SOURCES_ROOT%\%project_name%\%FILENAME%
 IF NOT EXIST %source_file% (
     ECHO Source file is not found: %source_file%
     EXIT /B 1
