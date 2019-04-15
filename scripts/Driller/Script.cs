@@ -28,7 +28,6 @@ public sealed class Program : MyGridProgram
         RotateForward = 1
     };
     State state;
-
     delegate void StateProcess(string argument, UpdateType updateSource);
     StateProcess currentStateProcess;
 
@@ -71,7 +70,8 @@ public sealed class Program : MyGridProgram
 
     void StateRotateForward(string argument, UpdateType updateSource)
     {
-        if (rotorR.UpperLimitRad <= rotorR.Angle)
+        if ((rotorR.Angle >= rotorR.UpperLimitRad)
+         || (rotorL.Angle <= rotorL.LowerLimitRad))
         {
             ChangeState_Idle();
         }
@@ -79,7 +79,8 @@ public sealed class Program : MyGridProgram
 
     void StateRotateBackward(string argument, UpdateType updateSource)
     {
-        if (rotorR.Angle <= rotorR.LowerLimitRad)
+        if ((rotorR.Angle <= rotorR.LowerLimitRad)
+         || (rotorL.Angle >= rotorL.UpperLimitRad))
         {
             ChangeState_Idle();
         }
@@ -147,7 +148,9 @@ public sealed class Program : MyGridProgram
     void RotateRotors()
     {
         SetUpRotorR();
+        SetUpRotorL();
         rotorR.RotorLock = false;
+        rotorL.RotorLock = false;
     }
 
     void SetUpRotorR()
@@ -155,6 +158,13 @@ public sealed class Program : MyGridProgram
         float rotationAngle = CalcRotationAngleR();
         SetLimitsRotorR(rotationAngle);
         SetSpeedRotorR();
+    }
+
+    void SetUpRotorL()
+    {
+        float rotationAngle = CalcRotationAngleL();
+        SetLimitsRotorL(rotationAngle);
+        SetSpeedRotorL();
     }
 
     float CalcRotationAngleR()
@@ -175,6 +185,24 @@ public sealed class Program : MyGridProgram
         return ToRadians(rotationAngleDeg);
     }
 
+    float CalcRotationAngleL()
+    {
+        int rotationAngleDeg = RotationCaliberDegrees;
+        int aberranceDeg = CalcAberranceDeg();
+        if (aberranceDeg != 0)
+        {
+            if (state == State.RotateForward)
+            {
+                rotationAngleDeg = aberranceDeg;
+            }
+            else
+            {
+                rotationAngleDeg = RotationCaliberDegrees - aberranceDeg;
+            }
+        }
+        return ToRadians(rotationAngleDeg);
+    }
+
     int CalcAberranceDeg()
     {
         return ToDegrees(rotorR.Angle) % RotationCaliberDegrees;
@@ -190,9 +218,24 @@ public sealed class Program : MyGridProgram
         SetRotorLimits(rotorR, newAngle);
     }
 
+    void SetLimitsRotorL(float rotationAngle)
+    {
+        float newAngle = Math.Abs(rotorR.Angle - (int)state * rotationAngle);
+        if (newAngle > RadiansInCircle)
+        {
+            newAngle -= RadiansInCircle;
+        }
+        SetRotorLimits(rotorL, newAngle);
+    }
+
     void SetSpeedRotorR()
     {
         rotorR.TargetVelocityRad = (int)state * RotationVelocity;
+    }
+
+    void SetSpeedRotorL()
+    {
+        rotorL.TargetVelocityRad = -(int)state * RotationVelocity;
     }
 
     void SetRotorLimits(IMyMotorAdvancedStator rotor, float newAngle)
