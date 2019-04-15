@@ -17,7 +17,8 @@ public sealed class Program : MyGridProgram
     // INGAME SCRIPT START
 
     const int PIDegrees = 180;
-    const float RadiansInCircle = 2 * (float)Math.PI;
+    const float DegreesInRadian = (float)Math.PI / PIDegrees;
+    const float RadiansInCircle = (float)Math.PI * 2;
     const int RotationCaliberDegrees = 5;
     const float RotationVelocity = 0.20F; // Rad/s
 
@@ -122,8 +123,7 @@ public sealed class Program : MyGridProgram
 
     void ChangeState_Idle()
     {
-        StopRotors();
-        Runtime.UpdateFrequency = UpdateFrequency.None;
+        ExitStateRotate();
         SetStateIdle();
     }
 
@@ -133,6 +133,14 @@ public sealed class Program : MyGridProgram
     {
         RotateRotors();
         Runtime.UpdateFrequency = UpdateFrequency.Update10;
+    }
+
+    // ExitState
+
+    void ExitStateRotate()
+    {
+        StopRotors();
+        Runtime.UpdateFrequency = UpdateFrequency.None;
     }
 
     // Other
@@ -175,7 +183,7 @@ public sealed class Program : MyGridProgram
         {
             if (state == State.RotateForward)
             {
-                rotationAngleDeg = RotationCaliberDegrees - aberranceDeg;
+                rotationAngleDeg -= aberranceDeg;
             }
             else
             {
@@ -197,7 +205,7 @@ public sealed class Program : MyGridProgram
             }
             else
             {
-                rotationAngleDeg = RotationCaliberDegrees - aberranceDeg;
+                rotationAngleDeg -= aberranceDeg;
             }
         }
         return ToRadians(rotationAngleDeg);
@@ -205,6 +213,7 @@ public sealed class Program : MyGridProgram
 
     int CalcAberranceDeg()
     {
+        //TODO
         return ToDegrees(rotorR.Angle) % RotationCaliberDegrees;
     }
 
@@ -241,16 +250,8 @@ public sealed class Program : MyGridProgram
     void SetRotorLimits(IMyMotorAdvancedStator rotor, float newAngle)
     {
         float currentAngle = rotor.Angle;
-        if (currentAngle < newAngle)
-        {
-            rotor.LowerLimitRad = currentAngle;
-            rotor.UpperLimitRad = newAngle;
-        }
-        else
-        {
-            rotor.LowerLimitRad = newAngle;
-            rotor.UpperLimitRad = currentAngle;
-        }
+        rotor.LowerLimitRad = Math.Min(currentAngle, newAngle);
+        rotor.UpperLimitRad = Math.Max(currentAngle, newAngle);
     }
 
     T GetBlock<T>(string name)
@@ -266,7 +267,6 @@ public sealed class Program : MyGridProgram
 
     int ToDegrees(float radians)
     {
-        const float DegreesInRadian = (float)Math.PI / PIDegrees;
         float degrees = DegreesInRadian * radians;
         return (int)Math.Round(degrees);
     }
