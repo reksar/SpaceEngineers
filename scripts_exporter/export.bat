@@ -3,9 +3,9 @@
 REM This script used as an external tool in Visual Studio to export ingame 
 REM scripts for Space Engineers game.
 REM Params:
-REM     %1 - Project name
+REM     %1 - Project name, or $(TargetName) in Visual Studio
 
-SET SOURCE_ROOT=..\scripts
+SET SOURCE_ROOT=E:\reksar\creation\SpaceEngineers\scripts
 SET DESTINATION_ROOT=C:\Users\reksar\AppData\Roaming\SpaceEngineers\IngameScripts\local
 SET STRART_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT START/="
 SET END_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT END/="
