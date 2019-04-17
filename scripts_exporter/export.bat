@@ -8,8 +8,8 @@ REM     %1 - Project name, or $(TargetName) in Visual Studio
 
 SET SOURCES_ROOT=E:\reksar\creation\SpaceEngineers\scripts
 SET DESTINATION_ROOT=C:\Users\reksar\AppData\Roaming\SpaceEngineers\IngameScripts\local
-SET STRART_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT START/="
-SET END_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT END/="
+SET STRART_LINE_PATTERN="/^\s*\/\/ INGAME SCRIPT START/="
+SET END_LINE_PATTERN="/^\s*\/\/ INGAME SCRIPT END/="
 SET SED=E:\reksar\soft\portable\git\usr\bin\sed.exe
 SET FILENAME=Script.cs
 
