@@ -32,8 +32,8 @@ IF NOT EXIST %DESTINATION_ROOT% (
 SET destination_dir=%DESTINATION_ROOT%\%project_name%
 IF NOT EXIST %destination_dir% MKDIR %destination_dir%
 
-REM Find first and last line of ingame script in the source file.
-REM Save the numbers of it lines.
+REM Find first and last line of ingame script in the source file, and
+REM save the numbers of these lines.
 SET tmp_file=%destination_dir%\tmp
 %SED% -n %STRART_LINE_PATTERN% %source_file% > %tmp_file%
 SET /P start_line_num= < %tmp_file%
@@ -43,9 +43,11 @@ SET /P end_line_num= < %tmp_file%
 REM Copy ingame part of the source file into Space Engineers game dir.
 %SED% -n "%start_line_num%,%end_line_num%p" %source_file% > %tmp_file%
 
-REM Remove first 4 spaces or tabulation at start of each line.
+REM Remove first code indent (tabulation or 4 spaces) at start of each line.
+REM Save script into original file.
+SET TAB_STOP=4
 SET script=%destination_dir%\%FILENAME%
-%SED% "s/^\(\s\{4\}\|\t\)//" %tmp_file% > %script%
+%SED% "s/^\(\s\{%TAB_STOP%\}\|\t\)//" %tmp_file% > %script%
 DEL %tmp_file%
 
 EXIT /B 0
