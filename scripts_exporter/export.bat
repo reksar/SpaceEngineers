@@ -50,4 +50,6 @@ SET script=%destination_dir%\%FILENAME%
 %SED% "s/^\(\s\{%TAB_STOP%\}\|\t\)//" %tmp_file% > %script%
 DEL %tmp_file%
 
+ECHO "%project_name%" script has been exported.
+
 EXIT /B 0
