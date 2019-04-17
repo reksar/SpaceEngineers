@@ -5,6 +5,7 @@ REM scripts for Space Engineers game.
 REM Params:
 REM     %1 - Project name, or $(TargetName) in Visual Studio
 
+
 SET SOURCES_ROOT=E:\reksar\creation\SpaceEngineers\scripts
 SET DESTINATION_ROOT=C:\Users\reksar\AppData\Roaming\SpaceEngineers\IngameScripts\local
 SET STRART_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT START/="
@@ -12,7 +13,9 @@ SET END_LINE_PATTERN="/^\s\+\/\/ INGAME SCRIPT END/="
 SET SED=E:\reksar\soft\portable\git\usr\bin\sed.exe
 SET FILENAME=Script.cs
 
-SET project_name=%1
+
+REM Visual Studio sends a quoted arguments, so we need to sanitize it
+SET project_name=%~1
 IF [%project_name%] == [] (
     ECHO C# project name is not specified.
     EXIT /B 1
