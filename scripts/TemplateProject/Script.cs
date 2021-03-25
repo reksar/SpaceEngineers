@@ -7,7 +7,7 @@
  * is the ingame script. It can be placed either into the Programming Block 
  * inside the game or into the file:
  * ...\AppData\Roaming\SpaceEngineers\IngameScripts\local\<ScriptName>\Script.cs
- * Also, these markers are required for script exporter.
+ * Also, these markers are required for script exporter (see `..\export.bat`).
  *
  * The rest code wraps the game script for development purposes, e.g. code 
  * autocompletion.
