@@ -1,6 +1,6 @@
-@echo off
+@ECHO off
 
-REM This script used as an external tool in Visual Studio to export ingame 
+REM This script used as the external tool in Visual Studio to export ingame 
 REM scripts for Space Engineers game.
 REM Params:
 REM     %1 - Project name, or $(TargetName) in Visual Studio
