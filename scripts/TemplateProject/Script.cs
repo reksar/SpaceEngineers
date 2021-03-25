@@ -1,12 +1,16 @@
 ﻿/*
- * Шаблон для написания внутриигровых скриптов
- * для программируемого блока в игре Space Engineers.
+ * For the Space Engineers (https://www.spaceengineersgame.com) game.
+ * It is the template for writing an ingame scripts, that are can be executed 
+ * by Programming Block inside the game.
  * 
- * Непосредственно внутриигровой скрипт находится между строками
- * "INGAME SCRIPT START" и "INGAME SCRIPT END".
- * Этот скрипт можно скопировать напрямую в тектовое поле
- * программируемого блока в игре, или экспортировать в файл
- * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<ScriptName>\Script.cs`
+ * A code between the // INGAME SCRIPT START and // INGAME SCRIPT END markers
+ * is the ingame script. It can be placed either into the Programming Block 
+ * inside the game or into the file:
+ * ...\AppData\Roaming\SpaceEngineers\IngameScripts\local\<ScriptName>\Script.cs
+ * Also, these markers are required for script exporter.
+ *
+ * The rest code wraps the game script for development purposes, e.g. code 
+ * autocompletion.
  */
 
 using System;
@@ -27,38 +31,26 @@ public sealed class Program : MyGridProgram
 {
     // INGAME SCRIPT START
 
-    public Program()
-    {
-        // Конструктор, вызванный единожды в каждой сессии и
-        // всегда перед вызовом других методов. Используйте его,
-        // чтобы инициализировать ваш скрипт.
-        //  
-        // Конструктор опционален и может быть удалён, 
-        // если в нём нет необходимости.
-        // 
-        // Рекомендуется использовать его, чтобы установить RuntimeInfo.UpdateFrequency,
-        // что позволит перезапускать ваш скрипт автоматически, без нужды в таймере.
-    }
+    /*
+     * Constructor is optional. It will executed once per game session and 
+     * before any other methods will be invoked.
+     *
+     * It is recommended to set `RuntimeInfo.UpdateFrequency` here for 
+     * restarting the script automatically without timer.
+     */
+    public Program() {}
 
-    public void Save()
-    {
-        // Вызывается, когда программе требуется сохранить своё состояние.
-        // Используйте этот метод, чтобы сохранить состояние программы
-        // в строковое поле Storage или в другое место.
-        // 
-        // Этот метод опционален и может быть удалён, если не требуется.
-    }
+    /*
+     * Optional method. Call it to save the script state into the `Storage` 
+     * string field or some other place.
+     */
+    public void Save() {}
 
-    public void Main(string argument, UpdateType updateSource)
-    {
-        // Главная точка входа в скрипт вызывается каждый раз,
-        // когда действие Запуск программного блока активируется,
-        // или скрипт самозапускается. Аргумент updateSource описывает,
-        // откуда поступило обновление.
-        // 
-        // Метод необходим сам по себе, но аргументы
-        // могут быть удалены, если не требуются. 
-    }
+    /*
+     * Runs every time either on Programming Block `Run`, or when script starts 
+     * automatically. Methos is required, but arguments are not.
+     */
+    public void Main(string argument, UpdateType updateSource) {}
 
     // INGAME SCRIPT END
 }
