@@ -6,8 +6,8 @@
  * A code between the // INGAME SCRIPT START and // INGAME SCRIPT END markers
  * is the ingame script. It can be placed either into the Programming Block 
  * inside the game or into the file:
- * ...\AppData\Roaming\SpaceEngineers\IngameScripts\local\<ScriptName>\Script.cs
- * Also, these markers are required for script exporter (see `..\export.bat`).
+ * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
+ * Also, these markers are required for script exporter `..\export.bat`.
  *
  * The rest code wraps the game script for development purposes, e.g. code 
  * autocompletion.
@@ -15,7 +15,7 @@
 
 using System;
 
-// Space Engineers game DLLs
+// Space Engineers DLLs
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
 using Sandbox.Game.EntityComponents;
