@@ -1,21 +1,19 @@
 @ECHO off
-
 REM This script used as the external tool in Visual Studio to export ingame 
 REM scripts for Space Engineers game.
-REM Params:
+REM ARGUMENTS:
 REM     %1 - Project name, or $(TargetName) in Visual Studio
-
-
 SET SOURCES_ROOT=E:\reksar\creation\SpaceEngineers\scripts
 SET DESTINATION_ROOT=C:\Users\reksar\AppData\Roaming\SpaceEngineers\IngameScripts\local
+SET SED=E:\reksar\soft\portable\git\usr\bin\sed.exe
 SET STRART_LINE_PATTERN="/^\s*\/\/ INGAME SCRIPT START/="
 SET END_LINE_PATTERN="/^\s*\/\/ INGAME SCRIPT END/="
-SET SED=E:\reksar\soft\portable\git\usr\bin\sed.exe
 SET FILENAME=Script.cs
 
 
-REM Visual Studio sends a quoted arguments, so we need to sanitize it
+REM Sanitizes the quoted argument.
 SET project_name=%~1
+
 IF [%project_name%] == [] (
     ECHO C# project name is not specified.
     EXIT /B 1
@@ -23,11 +21,11 @@ IF [%project_name%] == [] (
 SET source_file=%SOURCES_ROOT%\%project_name%\%FILENAME%
 IF NOT EXIST %source_file% (
     ECHO Source file is not found: %source_file%
-    EXIT /B 1
+    EXIT /B 2
 )
 IF NOT EXIST %DESTINATION_ROOT% (
     ECHO Space Engineers destination folder is not found: %DESTINATION_ROOT%
-    EXIT /B 1
+    EXIT /B 3
 )
 SET destination_dir=%DESTINATION_ROOT%\%project_name%
 IF NOT EXIST %destination_dir% MKDIR %destination_dir%
@@ -51,5 +49,4 @@ SET script=%destination_dir%\%FILENAME%
 DEL %tmp_file%
 
 ECHO "%project_name%" script has been exported.
-
 EXIT /B 0

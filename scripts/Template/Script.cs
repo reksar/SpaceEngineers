@@ -1,16 +1,13 @@
 ﻿/*
- * For the Space Engineers (https://www.spaceengineersgame.com) game.
- * It is the template for writing an ingame scripts, that are can be executed 
- * by Programming Block inside the game.
- * 
- * A code between the // INGAME SCRIPT START and // INGAME SCRIPT END markers
- * is the ingame script. It can be placed either into the Programming Block 
- * inside the game or into the file:
- * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
- * Also, these markers are required for script exporter `..\export.bat`.
+ * WARNING!
+ * `// INGAME SCRIPT START` and `// INGAME SCRIPT END` are required markers!
+ * Do not delete them, because the `export.bat` will not be able to work!
  *
- * The rest code wraps the game script for development purposes, e.g. code 
- * autocompletion.
+ * A code between the markers is the ingame script. It can be placed either 
+ * into the Programming Block inside the game directly or into the file:
+ * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
+ *
+ * The rest code is the wrapper for development purposes.
  */
 
 using System;
