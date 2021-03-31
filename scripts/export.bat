@@ -4,8 +4,8 @@ SET SED=D:\reksarka\app\run\git\usr\bin\sed.exe
 SET SRC_DIR=D:\reksarka\app\src\SpaceEngineers\scripts
 SET SE_DIR=C:\Users\reksar\AppData\Roaming\SpaceEngineers
 SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
-SET START_MARKER_PATTERN="/^\s*\/\/ INGAME SCRIPT START/="
-SET END_MARKER_PATTERN="/^\s*\/\/ INGAME SCRIPT END/="
+SET START_MARKER_PATTERN="/^\s*#region Ingame/="
+SET END_MARKER_PATTERN="/^\s*#endregion \/\/ Ingame/="
 SET CS=Script.cs
 SET PNG=thumb.png
 
@@ -35,19 +35,22 @@ IF NOT EXIST %dest_dir% (
     MKDIR %dest_dir%
 )
 
-REM Find first and last line of ingame script in the source file, and
-REM save the numbers of these lines.
-SET tmp_cs=%dest_dir%\tmp.cs
-%SED% -n %START_MARKER_PATTERN% %src_cs% > %tmp_cs%
-SET /P start_line_num= < %tmp_cs%
-%SED% -n %END_MARKER_PATTERN% %src_cs% > %tmp_cs%
-SET /P end_line_num= < %tmp_cs%
+REM First, it will be used to store SED's out, then - to store the raw script.
+SET tmp_file=%dest_dir%\tmp
+
+REM Find and save the bounds of ingame script region.
+%SED% -n %START_MARKER_PATTERN% %src_cs% > %tmp_file%
+SET /P start_line_num= < %tmp_file%
+SET /A start_line_num=start_line_num+1
+%SED% -n %END_MARKER_PATTERN% %src_cs% > %tmp_file%
+SET /P end_line_num= < %tmp_file%
+SET /A end_line_num=end_line_num-1
 
 REM Copy the ingame script part into the tmp file.
-%SED% -n "%start_line_num%,%end_line_num%p" %src_cs% > %tmp_cs%
+%SED% -n "%start_line_num%,%end_line_num%p" %src_cs% > %tmp_file%
 IF %ERRORLEVEL% NEQ 0 (
     ECHO Can not extract the ingame script part.
-    DEL %tmp_cs%
+    DEL %tmp_file%
     DEL %dest_dir%\%CS% 2>NUL
     EXIT /B 4
 )
@@ -55,8 +58,8 @@ IF %ERRORLEVEL% NEQ 0 (
 REM Remove first indent (tab or 4 spaces) at the start of each line.
 REM Save script into original file.
 SET TAB_STOP=4
-%SED% "s/^\(\s\{%TAB_STOP%\}\|\t\)//" %tmp_cs% > %dest_dir%\%CS%
-DEL %tmp_cs%
+%SED% "s/^\(\s\{%TAB_STOP%\}\|\t\)//" %tmp_file% > %dest_dir%\%CS%
+DEL %tmp_file%
 
 REM Copy the PNG image.
 IF EXIST %src_png% (

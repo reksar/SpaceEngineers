@@ -1,10 +1,8 @@
 ﻿/*
- * WARNING!
- * `// INGAME SCRIPT START` and `// INGAME SCRIPT END` are required markers!
- * Do not delete them, because the `export.bat` will not be able to work!
+ * WARNING! Do not delete the `Ingame` region!
  *
- * A code between the markers is the ingame script. It can be placed either 
- * into the Programming Block inside the game directly or into the file:
+ * A code from the `Ingame` region can be placed either into the Programming 
+ * Block inside the game directly or into the file:
  * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
  *
  * The rest code is the wrapper for development purposes.
@@ -26,7 +24,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 
 public sealed class Program : MyGridProgram
 {
-    // INGAME SCRIPT START
+    #region Ingame
 
     /*
      * Constructor is optional. It will executed once per game session and 
@@ -49,5 +47,5 @@ public sealed class Program : MyGridProgram
      */
     public void Main(string argument, UpdateType updateSource) {}
 
-    // INGAME SCRIPT END
+    #endregion // Ingame
 }
