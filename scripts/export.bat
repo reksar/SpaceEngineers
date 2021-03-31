@@ -45,6 +45,12 @@ SET /P end_line_num= < %tmp_cs%
 
 REM Copy the ingame script part into the tmp file.
 %SED% -n "%start_line_num%,%end_line_num%p" %src_cs% > %tmp_cs%
+IF %ERRORLEVEL% NEQ 0 (
+    ECHO Can not extract the ingame script part.
+    DEL %tmp_cs%
+    DEL %dest_dir%\%CS% 2>NUL
+    EXIT /B 4
+)
 
 REM Remove first indent (tab or 4 spaces) at the start of each line.
 REM Save script into original file.
