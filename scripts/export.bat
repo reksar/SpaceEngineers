@@ -1,8 +1,11 @@
 @ECHO off
 REM The `export.bat <script_dir>` cmd exports it to the Space Engineers game.
-SET SED=D:\reksarka\app\run\git\usr\bin\sed.exe
-SET SRC_DIR=D:\reksarka\app\src\SpaceEngineers\scripts
-SET SE_DIR=C:\Users\reksar\AppData\Roaming\SpaceEngineers
+
+REM Settings
+SET SED=<Path to Git>\usr\bin\sed.exe
+SET SRC_DIR=<Path to current repo>\SpaceEngineers\scripts
+SET SE_DIR=C:\Users\<User>\AppData\Roaming\SpaceEngineers
+
 SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
 SET START_MARKER_PATTERN="/^\s*#region Ingame/="
 SET END_MARKER_PATTERN="/^\s*#endregion \/\/ Ingame/="
