@@ -1,7 +1,7 @@
 ﻿/*
  * WARNING! Do not delete the `Ingame` region!
  *
- * A code from the `Ingame` region can be placed either into the Programming 
+ * A code from the `Ingame` region can be placed either into the Programmable 
  * Block inside the game directly or into the file:
  * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
  *
@@ -42,8 +42,8 @@ public sealed class Program : MyGridProgram
     public void Save() {}
 
     /*
-     * Runs every time either on Programming Block `Run`, or when script starts 
-     * automatically. Methos is required, but arguments are not.
+     * Runs every time either on Programmable Block `Run`, or when script 
+     * starts automatically. Methos is required, but arguments are not.
      */
     public void Main(string argument, UpdateType updateSource) {}
 
