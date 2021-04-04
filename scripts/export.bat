@@ -1,10 +1,12 @@
 @ECHO off
-REM Use `export.bat [full path to script_dir]` to export into the game.
+SET GIT_DIR=
 
-REM Settings
-SET SED=<Path to Git>\usr\bin\sed.exe
-SET SE_DIR=C:\Users\<User>\AppData\Roaming\SpaceEngineers
+REM Use `export.bat [full path to script_dir]` manually
+REM or `export.bat "${fileWorkspaceFolder}\\${relativeFileDirname}"` from 
+REM VS Code task, when a `Script.cs` file is in the active editor.
 
+SET SED=%GIT_DIR%\usr\bin\sed.exe
+SET SE_DIR=%userprofile%\AppData\Roaming\SpaceEngineers
 SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
 SET REGION="/^\s*#region Ingame/="
 SET ENDREGION="/^\s*#endregion \/\/ Ingame/="
