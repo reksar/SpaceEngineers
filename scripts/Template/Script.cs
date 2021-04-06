@@ -22,8 +22,19 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-public sealed class Program : MyGridProgram
-{
+/*
+ * When you create several scripts, e.g.:
+ * `scripts\SomeScript\`, `scripts\YetAnotherScript\` and so on,
+ * then there will be several `class Program` declarations. So use an unique 
+ * namespace for each script to avoid `class Program` declaration conflicts.
+ */
+namespace Template {
+
+/*
+ * Do not change this default declaration.
+ */
+public sealed class Program : MyGridProgram {
+
     #region Ingame
 
     /*
@@ -48,4 +59,4 @@ public sealed class Program : MyGridProgram
     public void Main(string argument, UpdateType updateSource) {}
 
     #endregion // Ingame
-}
+}}

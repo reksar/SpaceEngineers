@@ -33,10 +33,8 @@ missing, it is not required to add them.
 {
     "key": "ctrl+s",
     "command": "workbench.action.tasks.runTask",
-    "when": "resourceFilename == Script.cs && editorTextFocus",
-
-    // Task label
-    "args": "Export Space Engineers script"
+    "args": "Export Space Engineers script",
+    "when": "resourceFilename == Script.cs && editorTextFocus"
 }
 ```
 
