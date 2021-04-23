@@ -1,7 +1,6 @@
 @ECHO off
 
 SET GIT_DIR=
-SET TEMPLATE_DIR=scripts\Template
 SET SED=%GIT_DIR%\usr\bin\sed.exe
 SET SE_DIR=%userprofile%\AppData\Roaming\SpaceEngineers
 SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
@@ -18,12 +17,7 @@ IF NOT EXIST %SED% (
     EXIT /B 2
 )
 
-IF NOT EXIST %TEMPLATE_DIR% (
-    ECHO Script template is not found in "%TEMPLATE_DIR%".
-    EXIT /B 3
-)
-
 IF NOT EXIST %SE_DIR% (
     ECHO Space Engineers AppData is not found in "%SE_DIR%".
-    EXIT /B 4
+    EXIT /B 3
 )
