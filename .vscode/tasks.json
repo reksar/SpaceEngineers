@@ -7,7 +7,7 @@
     {
         "label": "Export Space Engineers script",
         "type": "shell",
-        "command": "scripts\\export.bat",
+        "command": "utils\\export.bat",
         "args": [
             "${fileWorkspaceFolder}\\${relativeFileDirname}"
         ],
@@ -16,7 +16,7 @@
     {
         "label": "Create Space Engineers script",
         "type": "shell",
-        "command": "scripts\\create.bat",
+        "command": "utils\\create.bat",
         "args": [
             "${input:dirname}"
         ],

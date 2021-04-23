@@ -1,16 +1,9 @@
-@ECHO off
-SET GIT_DIR=
+@CALL utils\config.bat || EXIT
 
 REM Exports ingame region of a script to the Space Engineers local storage.
 REM Use `export.bat [full path to src_dir]` manually
 REM or `export.bat "${fileWorkspaceFolder}\\${relativeFileDirname}"` from 
 REM VS Code task, when a `Script.cs` file is in the active editor.
-
-SET SED=%GIT_DIR%\usr\bin\sed.exe
-SET SE_DIR=%userprofile%\AppData\Roaming\SpaceEngineers
-SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
-SET CS=Script.cs
-SET PNG=thumb.png
 
 REM Unquoting the parameter, because the path may be passed both with quotes 
 REM (if it contains spaces) and without.
@@ -18,19 +11,14 @@ SET src_dir=%~1
 
 IF ["%src_dir%"] == [""] (
     ECHO Source script dir is not specified.
-    EXIT /B 1
-)
-
-IF NOT EXIST %SE_DIR% (
-    ECHO Space Engineers AppData is not found: %SE_DIR%
-    EXIT /B 2
+    EXIT /B 11
 )
 
 SET src_png=%src_dir%\%PNG%
 SET src_cs=%src_dir%\%CS%
 IF NOT EXIST "%src_cs%" (
     ECHO Source is not found: "%src_cs%"
-    EXIT /B 3
+    EXIT /B 12
 )
 
 REM Find a namespace in the given source.
@@ -39,7 +27,7 @@ FOR /F "tokens=2" %%G IN ('FINDSTR /I /B "namespace" "%src_cs%"') DO (
 )
 IF [%namespace%] == [] (
     ECHO The namespace is not found in "%src_cs%"
-    EXIT /B 4
+    EXIT /B 13
 )
 
 REM Extract `src_dirname` from `src_dir` full path.
@@ -57,7 +45,7 @@ IF NOT EXIST "%dest_dir%" (
 )
 IF %ERRORLEVEL% NEQ 0 (
     ECHO Can not create "%dest_dir%" dir.
-    EXIT /B 5
+    EXIT /B 14
 )
 
 REM It will be used to store the line numbers and then the raw ingame script.
@@ -78,7 +66,7 @@ IF %ERRORLEVEL% NEQ 0 (
     ECHO Can not extract ingame script part.
     DEL "%tmp%"
     DEL "%dest_dir%\%CS%" 2>NUL
-    EXIT /B 6
+    EXIT /B 15
 )
 
 REM Remove first indent (tab or 4 spaces) at the start of each line.
