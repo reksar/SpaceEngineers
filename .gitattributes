@@ -1,0 +1,2 @@
+config.bat filter=unset-git-dir
+SpaceEngineers.csproj filter=reset-se-path

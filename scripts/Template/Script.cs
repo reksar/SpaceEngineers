@@ -1,14 +1,4 @@
-﻿/*
- * WARNING! Do not delete the `Ingame` region!
- *
- * A code from the `Ingame` region can be placed either into the Programmable 
- * Block inside the game directly or into the file:
- * `<...>\AppData\Roaming\SpaceEngineers\IngameScripts\local\<Name>\Script.cs`
- *
- * The rest code is the wrapper for development purposes.
- */
-
-using System;
+﻿using System;
 
 // Space Engineers DLLs
 using Sandbox.ModAPI.Ingame;
@@ -23,40 +13,51 @@ using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
 /*
- * When you create several scripts, e.g.:
- * `scripts\SomeScript\`, `scripts\YetAnotherScript\` and so on,
- * then there will be several `class Program` declarations. So use an unique 
- * namespace for each script to avoid `class Program` declaration conflicts.
+ * Must be unique per each script project.
+ * Prevents collisions of multiple `class Program` declarations.
+ * Will be used to detect the ingame script region, whose name is the same.
  */
 namespace Template {
 
 /*
- * Do not change this default declaration.
+ * Do not change this declaration because this is the game requirement.
  */
 public sealed class Program : MyGridProgram {
 
-    #region Ingame
+    /*
+     * Must be same as the namespace. Will be used for automatic script export.
+     * The code inside this region is the ingame script.
+     */
+    #region Template
 
     /*
-     * Constructor is optional. It will executed once per game session and 
-     * before any other methods will be invoked.
-     *
-     * It is recommended to set `RuntimeInfo.UpdateFrequency` here for 
-     * restarting the script automatically without timer.
+     * The constructor, called only once every session and always before any 
+     * other method is called. Use it to initialize your script. 
+     *    
+     * The constructor is optional and can be removed if not needed.
+     
+     * It's recommended to set RuntimeInfo.UpdateFrequency here, which will 
+     * allow your script to run itself without a timer block.
      */
     public Program() {}
 
     /*
-     * Optional method. Call it to save the script state into the `Storage` 
-     * string field or some other place.
+     * Called when the program needs to save its state. Use this method to save
+     * your state to the Storage field or some other means. 
+     * 
+     * This method is optional and can be removed if not needed.
      */
     public void Save() {}
 
     /*
-     * Runs every time either on Programmable Block `Run`, or when script 
-     * starts automatically. Methos is required, but arguments are not.
+     * The main entry point of the script, invoked every time one of the 
+     * programmable block's Run actions are invoked, or the script updates 
+     * itself. The updateSource argument describes where the update came from.
+     * 
+     * The method itself is required, but the arguments above can be removed 
+     * if not needed.
      */
     public void Main(string argument, UpdateType updateSource) {}
 
-    #endregion // Ingame
+    #endregion // Template
 }}
