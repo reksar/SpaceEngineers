@@ -42,7 +42,8 @@ missing, it is not required to add them.
 
 ## Configure utility scripts
 
-* Set full path without spaces for `GIT_DIR` in the `utils\config.bat`
+* Set full path without spaces and without slash at the end for `GIT_DIR` in 
+the `utils\config.bat`
 
 * Add the following key binding into the 
 `%userprofile%\AppData\Roaming\Code\User\keybindings.json`:
@@ -59,3 +60,7 @@ missing, it is not required to add them.
 I was inspired by 
 [this comment](https://github.com/gregretkowski/VSC-SE/issues/1#issuecomment-812445939) 
 and decided to make more universal and lightweight solution.
+
+## Git filters (optional)
+
+To prevent committing your local settings, run `utils\git\config.bat`.
