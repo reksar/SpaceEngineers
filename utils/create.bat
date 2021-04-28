@@ -3,13 +3,13 @@
 REM Use `create.bat [name]` to create `scripts\[name]` from `scripts\Template`.
 REM Changes the namespace and region to [name].
 
-SET TEMPLATE_DIR=scripts\Template
-IF NOT EXIST %TEMPLATE_DIR% (
-    ECHO Script template is not found in "%TEMPLATE_DIR%".
+SET template_dir=scripts\Template
+IF NOT EXIST %template_dir% (
+    ECHO Script template is not found in "%template_dir%".
     EXIT /B 21
 )
 
-SET src_cs=%TEMPLATE_DIR%\%CS%
+SET src_cs=%template_dir%\%CS%
 IF NOT EXIST "%src_cs%" (
     ECHO Source is not found: "%src_cs%"
     EXIT /B 22
@@ -32,7 +32,7 @@ SET dest_cs=%dest_dir%\%CS%
 
 %SED% "s/Template/%name%/" "%src_cs%" > "%dest_cs%"
 
-SET src_png=%TEMPLATE_DIR%\%PNG%
+SET src_png=%template_dir%\%PNG%
 SET dest_png=%dest_dir%\%PNG%
 COPY "%src_png%" "%dest_png%" 1>NUL
 
