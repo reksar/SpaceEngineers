@@ -30,7 +30,7 @@ IF %ERRORLEVEL% NEQ 0 (
 
 SET dest_cs=%dest_dir%\%CS%
 
-%SED% "s/Template/%name%/" "%src_cs%" > "%dest_cs%"
+"%SED%" "s/Template/%name%/" "%src_cs%" > "%dest_cs%"
 
 SET src_png=%template_dir%\%PNG%
 SET dest_png=%dest_dir%\%PNG%
