@@ -55,13 +55,13 @@ REM Set ingame region patterns based on namespace.
 SET region="/^\s*#region %namespace%/="
 SET endregion="/^\s*#endregion \/\/ %namespace%/="
 REM Find and save the bounds of the ingame region.
-%SED% -n %region% "%src_cs%" > "%tmp%"
+"%SED%" -n %region% "%src_cs%" > "%tmp%"
 SET /P start_line_num= < "%tmp%"
-%SED% -n %endregion% "%src_cs%" > "%tmp%"
+"%SED%" -n %endregion% "%src_cs%" > "%tmp%"
 SET /P end_line_num= < "%tmp%"
 
 REM Copy the raw ingame script part.
-%SED% -n "%start_line_num%,%end_line_num%p" "%src_cs%" > "%tmp%"
+"%SED%" -n "%start_line_num%,%end_line_num%p" "%src_cs%" > "%tmp%"
 IF %ERRORLEVEL% NEQ 0 (
     ECHO Can not extract ingame script part.
     DEL "%tmp%"
@@ -72,7 +72,7 @@ IF %ERRORLEVEL% NEQ 0 (
 REM Remove first indent (tab or 4 spaces) at the start of each line.
 REM Save the script into the final file.
 SET TAB_STOP=4
-%SED% "s/^\(\s\{%TAB_STOP%\}\|\t\)//" "%tmp%" > "%dest_dir%\%CS%"
+"%SED%" "s/^\(\s\{%TAB_STOP%\}\|\t\)//" "%tmp%" > "%dest_dir%\%CS%"
 
 DEL "%tmp%"
 
