@@ -1,23 +1,23 @@
-@ECHO off
+@echo off
 
-SET GIT_DIR=
-SET SED=%GIT_DIR%\usr\bin\sed.exe
-SET SE_DIR=%userprofile%\AppData\Roaming\SpaceEngineers
-SET SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
-SET CS=Script.cs
-SET PNG=thumb.png
+set GIT_DIR=
+set SED=%GIT_DIR%\usr\bin\sed.exe
+set SE_DIR=%userprofile%\AppData\Roaming\SpaceEngineers
+set SE_SCRIPTS_DIR=%SE_DIR%\IngameScripts\local
+set CS=Script.cs
+set PNG=thumb.png
 
-IF NOT EXIST "%GIT_DIR%" (
-    ECHO Git is not found in "%GIT_DIR%".
-    EXIT /B 1
+if not exist "%GIT_DIR%" (
+    echo Git is not found in "%GIT_DIR%".
+    exit /b 1
 )
 
-IF NOT EXIST "%SED%" (
-    ECHO Sed editor is not found in "%SED%".
-    EXIT /B 2
+if not exist "%SED%" (
+    echo Sed editor is not found in "%SED%".
+    exit /b 2
 )
 
-IF NOT EXIST "%SE_DIR%" (
-    ECHO Space Engineers AppData is not found in "%SE_DIR%".
-    EXIT /B 3
+if not exist "%SE_DIR%" (
+    echo Space Engineers AppData is not found in "%SE_DIR%".
+    exit /b 3
 )

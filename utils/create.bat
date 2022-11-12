@@ -1,40 +1,40 @@
-@CALL utils\config.bat || EXIT
+@call utils\config.bat || exit
 
-REM Use `create.bat [name]` to create `scripts\[name]` from `scripts\Template`.
-REM Changes the namespace and region to [name].
+rem  Use `create.bat [name]` to create `scripts\[name]` from `scripts\Template`.
+rem  Changes the namespace and region to [name].
 
-SET template_dir=scripts\Template
-IF NOT EXIST %template_dir% (
-    ECHO Script template is not found in "%template_dir%".
-    EXIT /B 21
+set template_dir=scripts\Template
+if not exist %template_dir% (
+    echo Script template is not found in "%template_dir%".
+    exit /b 21
 )
 
-SET src_cs=%template_dir%\%CS%
-IF NOT EXIST "%src_cs%" (
-    ECHO Source is not found: "%src_cs%"
-    EXIT /B 22
+set src_cs=%template_dir%\%CS%
+if not exist "%src_cs%" (
+    echo Source is not found: "%src_cs%"
+    exit /b 22
 )
 
-SET name=%~1
-SET dest_dir=scripts\%name%
-IF EXIST "%dest_dir%" (
-    ECHO Script "%name%" already exists.
-    EXIT /B 23
+set name=%~1
+set dest_dir=scripts\%name%
+if exist "%dest_dir%" (
+    echo Script "%name%" already exists.
+    exit /b 23
 )
 
-MKDIR "%dest_dir%" 2>NUL
-IF %ERRORLEVEL% NEQ 0 (
-    ECHO Can not create "%dest_dir%" dir.
-    EXIT /B 24
+mkdir "%dest_dir%" 2>NUL
+if %ERRORLEVEL% neq 0 (
+    echo Can not create "%dest_dir%" dir.
+    exit /b 24
 )
 
-SET dest_cs=%dest_dir%\%CS%
+set dest_cs=%dest_dir%\%CS%
 
 "%SED%" "s/Template/%name%/" "%src_cs%" > "%dest_cs%"
 
-SET src_png=%template_dir%\%PNG%
-SET dest_png=%dest_dir%\%PNG%
-COPY "%src_png%" "%dest_png%" 1>NUL
+set src_png=%template_dir%\%PNG%
+set dest_png=%dest_dir%\%PNG%
+copy "%src_png%" "%dest_png%" 1>NUL
 
-ECHO The "%name%" skeleton has been created.
-EXIT /B 0
+echo The "%name%" skeleton has been created.
+exit /b 0
