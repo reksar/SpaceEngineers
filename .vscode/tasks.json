@@ -1,34 +1,31 @@
 {
-
-// See https://go.microsoft.com/fwlink/?LinkId=733558
-// for the documentation about the tasks.json format
-"version": "2.0.0",
-"tasks": [
+  // See about tasks.json https://go.microsoft.com/fwlink/?LinkId=733558
+  "version": "2.0.0",
+  "tasks": [
     {
-        "label": "Export Space Engineers script",
-        "type": "shell",
-        "command": "utils\\export.bat",
-        "args": [
-            "${fileWorkspaceFolder}\\${relativeFileDirname}"
-        ],
-        "problemMatcher": []
+      "label": "Export Space Engineers script",
+      "type": "shell",
+      "command": "utils\\export.bat",
+      "args": [
+        "${fileWorkspaceFolder}\\${relativeFileDirname}"
+      ],
+      "problemMatcher": []
     },
     {
-        "label": "Create Space Engineers script",
-        "type": "shell",
-        "command": "utils\\create.bat",
-        "args": [
-            "${input:dirname}"
-        ],
-        "problemMatcher": []
+      "label": "Create Space Engineers script",
+      "type": "shell",
+      "command": "utils\\create.bat",
+      "args": [
+        "${input:dirname}"
+      ],
+      "problemMatcher": []
     }
-],
-"inputs": [
+  ],
+  "inputs": [
     {
-        "id": "dirname",
-        "type": "promptString",
-        "description": "The name of the dir and script to create"
+      "id": "dirname",
+      "type": "promptString",
+      "description": "The script name to create"
     }
-]
-
+  ]
 }
