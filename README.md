@@ -27,20 +27,22 @@ Save a `Script.cs` by pressing `Ctrl+S`.
 
 The dir containing the active `Script.cs` will be copied to the game.
 
-# Setup
-
-## Main stuff with IntelliSense support
+## Requirements
 
 * [Git for Windows](https://git-scm.com/download/win)
-* [.NET SDK](https://dotnet.microsoft.com/)
-* [VS Code](https://code.visualstudio.com/) editor with 
+
+* [.NET SDK](https://dotnet.microsoft.com)
+
+* [VS Code](https://code.visualstudio.com) editor with
 [C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) 
 extension
 
-When C# extension of VS Code notificates that build and debug assets are 
-missing, it is not required to add them.
+## Settings
 
-## Configure utility scripts
+NOTE: C# build and debug assets are not required.
+
+* Ensure the version `<TargetFramework>net6.0</TargetFramework>` in
+`SpaceEngineers.csproj` is valid.
 
 * Set full path without spaces and without slash at the end for `GIT_DIR` in 
 the `utils\config.bat`
@@ -48,7 +50,7 @@ the `utils\config.bat`
 * Add the following key binding into the 
 `%userprofile%\AppData\Roaming\Code\User\keybindings.json`:
 
-```json
+``` JSON
 {
     "key": "ctrl+s",
     "command": "workbench.action.tasks.runTask",
