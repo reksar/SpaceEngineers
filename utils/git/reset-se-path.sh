@@ -1,2 +1,2 @@
 #!/bin/sh
-sed -e "s/[[:alpha:]]:.*Bin64/C:\\\Program Files (x86)\\\Steam\\\steamapps\\\common\\\SpaceEngineers\\\Bin64/"
+sed -e "s/<SpaceEngineers>.*<\/SpaceEngineers>/<SpaceEngineers>C:\\\Program Files (x86)\\\Steam\\\steamapps\\\common\\\SpaceEngineers<\/SpaceEngineers>/"
