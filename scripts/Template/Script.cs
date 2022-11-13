@@ -35,7 +35,7 @@ public sealed class Program : MyGridProgram {
      * other method is called. Use it to initialize your script. 
      *    
      * The constructor is optional and can be removed if not needed.
-     
+     *
      * It's recommended to set RuntimeInfo.UpdateFrequency here, which will 
      * allow your script to run itself without a timer block.
      */
