@@ -15,7 +15,7 @@ the game API (DLLs are plugged in `SpaceEngineers.csproj`)
 * [Git for Windows](https://git-scm.com/download/win)
 
 * [.NET SDK](https://dotnet.microsoft.com)
-Notice `<TargetFramework>net6.0</TargetFramework>` in `SpaceEngineers.csproj`
+(notice `<TargetFramework>net6.0</TargetFramework>` in `SpaceEngineers.csproj`)
 
 * [VS Code](https://code.visualstudio.com) with
 [C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) 

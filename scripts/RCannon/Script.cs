@@ -19,13 +19,13 @@ public sealed class Program : MyGridProgram {
 
 	#region RCannon
 
-	const float MAX_ROTOR_DISPLACEMENT = 11; // cm
+	const float MAX_ROTOR_DISPLACEMENT = 0.11f; // m
 	List<IMyMotorStator> Spring;
 	List<IMyShipWelder> Welders;
 	IMyShipMergeBlock WarheadMerge;
 	IMyTextSurface MeLCD, MeKeyLCD;
-	StateMachine FSM;
-	delegate void StateMachine(string argument, UpdateType updateSource);
+	StateRunner State;
+	delegate void StateRunner(string argument, UpdateType updateSource);
 
 	public Program() {
 		Runtime.UpdateFrequency = UpdateFrequency.Update1;
@@ -53,22 +53,20 @@ public sealed class Program : MyGridProgram {
 		MeKeyLCD = Me.GetSurface(1);
 		MeKeyLCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
 
-		FSM = FitSpring; // Init state.
+		State = FitSpring;
 	}
 
 	public void Main(string argument, UpdateType updateSource) {
-		FSM(argument, updateSource);
+		State(argument, updateSource);
 	}
 
 	void FitSpring(string argument, UpdateType updateSource) {
-		// TODO: Slow down the spring compression.
 
 		IndicateNotReady();
 
 		WarheadMerge.Enabled = true;
 
 		var AlignedRotors = Spring.FindAll(rotor => rotor.Angle == 0);
-
 		AlignedRotors.ForEach(rotor => {
 			rotor.Enabled = false;
 			rotor.RotorLock = true;
@@ -76,15 +74,13 @@ public sealed class Program : MyGridProgram {
 		});
 
 		var UnalignedRotors = Spring.FindAll(rotor => rotor.Angle != 0);
-
 		UnalignedRotors.ForEach(rotor => {
 			rotor.Enabled = true;
 			rotor.RotorLock = false;
-			rotor.Displacement = MAX_ROTOR_DISPLACEMENT;
 		});
 
 		if (UnalignedRotors.Count == 0) {
-			FSM = WeldWarhead;
+			State = WeldWarhead;
 		}
 	}
 
@@ -99,7 +95,7 @@ public sealed class Program : MyGridProgram {
 			Warhead.IsArmed = false;
 			Welders.ForEach(welder => welder.Enabled = false);
 			IndicateReady();
-			FSM = Ready;
+			State = Ready;
 		} catch {
 			// Can't GetBlockWithName "RCannonWarhead".
 			Welders.ForEach(welder => welder.Enabled = true);
@@ -108,16 +104,22 @@ public sealed class Program : MyGridProgram {
 
 	void Ready(string argument, UpdateType updateSource) {
 		if (updateSource != UpdateType.Update1 && argument == "Fire") {
-			FSM = Fire;
+			State = Fire;
 		}
 	}
 
 	void Fire(string argument, UpdateType updateSource) {
-		// TODO: Arm warhead.
 		IndicateNotReady();
+		try {
+			// Throws an exception if the block is not found.
+			var Warhead = GridTerminalSystem.GetBlockWithName("RCannonWarhead") as IMyWarhead;
+			Warhead.IsArmed = true;
+		} catch {
+			// Can't GetBlockWithName "RCannonWarhead".
+		}
 		Spring.ForEach(rotor => rotor.Displacement = MAX_ROTOR_DISPLACEMENT);
 		WarheadMerge.Enabled = false;
-		FSM = FitSpring;
+		State = FitSpring;
 	}
 
 	List<T> SelectType<T>(IMyBlockGroup group) where T : class {
