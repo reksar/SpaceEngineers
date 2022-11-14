@@ -8,16 +8,16 @@ set CS=Script.cs
 set PNG=thumb.png
 
 if not exist "%GIT_DIR%" (
-    echo Git is not found in "%GIT_DIR%".
-    exit /b 1
+  echo Git is not found in "%GIT_DIR%".
+  exit /b 1
 )
 
 if not exist "%SED%" (
-    echo Sed editor is not found in "%SED%".
-    exit /b 2
+  echo Sed editor is not found in "%SED%".
+  exit /b 2
 )
 
 if not exist "%SE_DIR%" (
-    echo Space Engineers AppData is not found in "%SE_DIR%".
-    exit /b 3
+  echo Space Engineers AppData is not found in "%SE_DIR%".
+  exit /b 3
 )

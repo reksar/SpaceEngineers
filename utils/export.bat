@@ -1,53 +1,55 @@
+@setlocal
 @call utils\config.bat || exit
 
-rem  Exports ingame region of a script to the Space Engineers local storage.
-rem  Use `export.bat [full path to src_dir]` manually
-rem  or `export.bat "${fileWorkspaceFolder}\\${relativeFileDirname}"` from 
-rem  VS Code task, when a `Script.cs` file is in the active editor.
+rem  Exports ingame script to Space Engineers local storage.
 
-rem  Unquoting the parameter, because the path may be passed both with quotes 
-rem  (if it contains spaces) and without.
-set src_dir=%~1
+rem  Required argument: the full path to a dir containing the Script.cs and
+rem  (optionally) thumb.png file.
+rem
+rem  You can pass the "${fileWorkspaceFolder}\\${relativeFileDirname}" argument
+rem  inside the VS Code task, when a Script.cs file is in the active editor.
+set script_dir=%~1
 
-if "%src_dir%"=="" (
+if "%script_dir%"=="" (
   echo Source script dir is not specified.
   exit /b 11
 )
 
-set src_png=%src_dir%\%PNG%
-set src_cs=%src_dir%\%CS%
+set src_png=%script_dir%\%PNG%
+set src_cs=%script_dir%\%CS%
+
 if not exist "%src_cs%" (
-  echo Source is not found: "%src_cs%"
+  echo Source is not found: "%src_cs%".
   exit /b 12
 )
 
-rem  Find a namespace in the given source.
-for /f "tokens=2" %%i in ('FINDSTR /I /B "namespace" "%src_cs%"') do (
+rem  Find the namespace in the given source.
+for /f "tokens=2" %%i in ('findstr /i /b "namespace" "%src_cs%"') do (
   set namespace=%%i
 )
 
-if [%namespace%] == [] (
-  echo The namespace is not found in "%src_cs%"
+if "%namespace%"=="" (
+  echo The namespace is not found in "%src_cs%".
   exit /b 13
 )
 
-rem  Extract `src_dirname` from `src_dir` full path.
-for %%i in ("%src_dir%") do (
+rem  Extract `src_dirname` from the `script_dir` full path.
+for %%i in ("%script_dir%") do (
   set src_dirname=%%~nxi
 )
 
-if not ["%src_dirname%"] == ["%namespace%"] (
+if not "%src_dirname%"=="%namespace%" (
   echo WARN: "%src_dirname%" dir and %namespace% namespace is not same!
 )
 
-rem  Create a dir in the game local storage.
 set dest_dir=%SE_SCRIPTS_DIR%\%src_dirname%
+
+rem  Create a dir in the game local storage.
 if not exist "%dest_dir%" (
   mkdir "%dest_dir%" 2>NUL
 )
-
 if %ERRORLEVEL% neq 0 (
-  echo Can not create "%dest_dir%" dir.
+  echo Cannot create "%dest_dir%" dir.
   exit /b 14
 )
 
@@ -57,6 +59,7 @@ set tmp=%dest_dir%\tmp
 rem  Set ingame region patterns based on namespace.
 set region="/^\s*#region %namespace%/="
 set endregion="/^\s*#endregion \/\/ %namespace%/="
+
 rem  Find and save the bounds of the ingame region.
 "%SED%" -n %region% "%src_cs%" > "%tmp%"
 set /p start_line_num= < "%tmp%"
@@ -72,8 +75,8 @@ if %ERRORLEVEL% neq 0 (
   exit /b 15
 )
 
-rem  Remove first indent (tab or 4 spaces) at the start of each line.
-rem  Save the script into the final file.
+rem  Remove the first indent (tab or 4 spaces) at the start of each line and
+rem  save the script into the final file.
 set TAB_STOP=4
 "%SED%" "s/^\(\s\{%TAB_STOP%\}\|\t\)//" "%tmp%" > "%dest_dir%\%CS%"
 
@@ -84,5 +87,5 @@ if exist "%src_png%" (
   copy "%src_png%" "%dest_dir%\%PNG%" 1>NUL
 )
 
-echo "%src_dir%" has been exported.
-exit /b 0
+echo "%script_dir%" has been exported.
+endlocal
