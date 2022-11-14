@@ -4,64 +4,50 @@ Toolkit for scripting a *Programmable Block* in the
 [Space Engineers](https://www.spaceengineersgame.com) game.
 
 **Features**
+
 * [IntelliSense](https://code.visualstudio.com/docs/editor/intellisense) for
 the game API (DLLs are plugged in `SpaceEngineers.csproj`)
-* Export to the game local storage during saving a `Script.cs` by pressing 
-`Ctrl+S`
+
+* Automatic export to game local storage when saving a `Script.cs`
+
+# Requirements
+
+* [Git for Windows](https://git-scm.com/download/win)
+
+* [.NET SDK](https://dotnet.microsoft.com)
+Notice `<TargetFramework>net6.0</TargetFramework>` in `SpaceEngineers.csproj`
+
+* [VS Code](https://code.visualstudio.com) with
+[C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) 
+extension (build and debug assets are not required)
 
 # Usage
 
 ## Create a new script
 
-Run `Create Space Engineers script` task from `Terminal`->`Run Task...` menu.
+Run the `Create Space Engineers script` task from the
+`Terminal` -> `Run Task...` menu, then enter a name for the new script.
+This name will be used as the dir name and C# namespace/region identifier.
 
-Then enter a name for your new script. It must be a valid dir name and a C# 
-namespace/region identifier.
+You can copy `scripts\Template` -> `scripts\[NewName]` manually and replace all
+`Template` entries with `[NewName]` in `Script.cs` file.
 
-You can copy `scripts\Template` -> `scripts\[NewName]` manually and replace
-the `Template` word with `[NewName]` in `Script.cs`.
+## Save and Export
 
-## Export to the game
-
-Save a `Script.cs` by pressing `Ctrl+S`.
-
-The dir containing the active `Script.cs` will be copied to the game.
-
-## Requirements
-
-* [Git for Windows](https://git-scm.com/download/win)
-
-* [.NET SDK](https://dotnet.microsoft.com)
-
-* [VS Code](https://code.visualstudio.com) editor with
-[C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) 
-extension
-
-## Settings
-
-NOTE: C# build and debug assets are not required.
-
-* Ensure the version `<TargetFramework>net6.0</TargetFramework>` in
-`SpaceEngineers.csproj` is valid.
-
-* Set full path without spaces and without slash at the end for `GIT_DIR` in 
-the `utils\config.bat`
-
-* Add the following key binding into the 
+Add the following key binding to
 `%userprofile%\AppData\Roaming\Code\User\keybindings.json`:
 
 ``` JSON
 {
-    "key": "ctrl+s",
-    "command": "workbench.action.tasks.runTask",
-    "args": "Export Space Engineers script",
-    "when": "resourceFilename == Script.cs && editorTextFocus"
+  "key": "ctrl+s",
+  "command": "workbench.action.tasks.runTask",
+  "args": "Export Space Engineers script",
+  "when": "resourceFilename == Script.cs && editorTextFocus"
 }
 ```
 
-I was inspired by 
-[this comment](https://github.com/gregretkowski/VSC-SE/issues/1#issuecomment-812445939) 
-and decided to make more universal and lightweight solution.
+When you save the `Script.cs` by pressing `Ctrl+S`, its dir will be copied to
+the game local storage.
 
 ## Git filters (optional)
 
