@@ -20,18 +20,29 @@ public sealed class Program : MyGridProgram {
 	#region RCannon
 
 	const float MAX_ROTOR_DISPLACEMENT = 0.11f; // m
+
+	// Image names that will be displayed on the LCD at the Programming Block keyboard to indicate readiness to Fire.
+	const string READY = "Arrow";
+	const string NOT_READY = "Cross";
+
+	IMyTextSurface MeKeyLCD;
+
 	List<IMyMotorStator> Spring;
 	List<IMyShipWelder> Welders;
 	IMyShipMergeBlock WarheadMerge;
-	IMyTextSurface MeLCD, MeKeyLCD;
+
+	// Implements FSM.
 	StateRunner State;
 	delegate void StateRunner(string argument, UpdateType updateSource);
 
 	public Program() {
 		Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
+		WarheadMerge = GridTerminalSystem.GetBlockWithName("RCannonMerge") as IMyShipMergeBlock;
+
 		IMyBlockGroup RCannon = GridTerminalSystem.GetBlockGroupWithName("RCannon");
-		Spring = SelectType<IMyMotorStator>(RCannon);
+		
+		Spring = Select<IMyMotorStator>(RCannon);
 		Spring.ForEach(rotor => {
 			rotor.Enabled = false;
 			rotor.RotorLock = true;
@@ -41,15 +52,14 @@ public sealed class Program : MyGridProgram {
 			rotor.UpperLimitRad = 0;
 			rotor.TargetVelocityRPM = 60;
 		});
-		Welders = SelectType<IMyShipWelder>(RCannon);
+		
+		Welders = Select<IMyShipWelder>(RCannon);
 		Welders.ForEach(welder => {
 			welder.Enabled = false;
 			welder.UseConveyorSystem = true;
 		});
-		WarheadMerge = GridTerminalSystem.GetBlockWithName("RCannonMerge") as IMyShipMergeBlock;
 
-		MeLCD = Me.GetSurface(0);
-		MeLCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+		// Keyboard LCD will be used as indicator.
 		MeKeyLCD = Me.GetSurface(1);
 		MeKeyLCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
 
@@ -62,9 +72,7 @@ public sealed class Program : MyGridProgram {
 
 	void FitSpring(string argument, UpdateType updateSource) {
 
-		IndicateNotReady();
-
-		WarheadMerge.Enabled = true;
+		Indicate(NOT_READY);
 
 		var AlignedRotors = Spring.FindAll(rotor => rotor.Angle == 0);
 		AlignedRotors.ForEach(rotor => {
@@ -86,56 +94,57 @@ public sealed class Program : MyGridProgram {
 
 	void WeldWarhead(string argument, UpdateType updateSource) {
 
-		IndicateNotReady();
+		WarheadMerge.Enabled = true;
 
-		try {
-			// Throws an exception if the block is not found.
-			var Warhead = GridTerminalSystem.GetBlockWithName("RCannonWarhead") as IMyWarhead;
+		// Assume that the warhead is welded if this block exists.
+		var Sensor = GridTerminalSystem.GetBlockWithName("RCannonWarheadSensor") as IMySensorBlock;
 
-			Warhead.IsArmed = false;
-			Welders.ForEach(welder => welder.Enabled = false);
-			IndicateReady();
-			State = Ready;
-		} catch {
-			// Can't GetBlockWithName "RCannonWarhead".
+		if (Sensor == null) {
+			Indicate(NOT_READY);
 			Welders.ForEach(welder => welder.Enabled = true);
+		} else {
+			Indicate(READY);
+			State = Ready;
+			Welders.ForEach(welder => welder.Enabled = false);
 		}
 	}
 
 	void Ready(string argument, UpdateType updateSource) {
-		if (updateSource != UpdateType.Update1 && argument == "Fire") {
+		if (updateSource == UpdateType.Trigger && argument == "Fire") {
 			State = Fire;
 		}
 	}
 
 	void Fire(string argument, UpdateType updateSource) {
-		IndicateNotReady();
+
+		Indicate(NOT_READY);
+
 		try {
-			// Throws an exception if the block is not found.
 			var Warhead = GridTerminalSystem.GetBlockWithName("RCannonWarhead") as IMyWarhead;
 			Warhead.IsArmed = true;
+
+			// If the Warhead is not detonated by Sensor or by damage, it will be self-destruct after
+			Warhead.DetonationTime = 60; // s
+
+			Warhead.StartCountdown();
 		} catch {
-			// Can't GetBlockWithName "RCannonWarhead".
+			Echo("ERR: Warhead is not found!");
 		}
+
 		Spring.ForEach(rotor => rotor.Displacement = MAX_ROTOR_DISPLACEMENT);
 		WarheadMerge.Enabled = false;
 		State = FitSpring;
 	}
 
-	List<T> SelectType<T>(IMyBlockGroup group) where T : class {
+	List<T> Select<T>(IMyBlockGroup group) where T : class {
 		var Blocks = new List<T>();
 		group.GetBlocksOfType<T>(Blocks);
 		return Blocks;
 	}
 
-	void IndicateNotReady() {
+	void Indicate(string image) {
 		MeKeyLCD.ClearImagesFromSelection();
-		MeKeyLCD.AddImageToSelection("Cross");
-	}
-
-	void IndicateReady() {
-		MeKeyLCD.ClearImagesFromSelection();
-		MeKeyLCD.AddImageToSelection("Arrow");
+		MeKeyLCD.AddImageToSelection(image);
 	}
 
 	#endregion // RCannon
