@@ -5,11 +5,12 @@ using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
 using Sandbox.Game.EntityComponents;
 using VRageMath;
-using VRage.Game;
+using VRage;
 using VRage.Collections;
+using VRage.Game;
 using VRage.Game.Components;
-using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
+using VRage.Game.ObjectBuilders.Definitions;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
 /*
