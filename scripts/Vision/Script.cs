@@ -95,7 +95,7 @@ public sealed class Program : MyGridProgram {
 	public void Main(string argument, UpdateType updateSource) {
 		UpdateSensors();
 		UpdateEntities();
-		IGC.SendBroadcastMessage(IGC_VISION, SerializeVisionEntities(), TransmissionDistance.CurrentConstruct);
+		IGC.SendBroadcastMessage(IGC_VISION, SerializeEntities(), TransmissionDistance.CurrentConstruct);
 		MeLCD.WriteText(String.Join("\n", ActualEntities.ToImmutableList().ConvertAll(entity => entity.Name)));
 	}
 
@@ -114,13 +114,11 @@ public sealed class Program : MyGridProgram {
 		Sensors.AddRange(BlockStorage.ConvertAll(block => new Sensor(block)));
 	}
 
-	List<MyDetectedEntityInfo> DetectedEntities {
-		get {
-			return Sensors
-				.ConvertAll(sensor => sensor.Entity())
-				.FindAll(entity => ! entity.IsEmpty());
-		}
-	}
+	IEnumerable<MyDetectedEntityInfo> DetectedEntities { get {
+		return Sensors
+			.ConvertAll(sensor => sensor.Entity())
+			.FindAll(entity => ! entity.IsEmpty());
+	}}
 
 	void UpdateEntities() {
 		DeprecatedEntities.UnionWith(ActualEntities);
@@ -147,19 +145,19 @@ public sealed class Program : MyGridProgram {
 		MyTuple<
 			MyTuple<long, string, int, Vector3D, bool, MatrixD>,
 			MyTuple<Vector3, int, BoundingBoxD, long>>>
-	SerializeVisionEntities() {
-		return ActualEntities.ToImmutableList().ConvertAll(SerializeVisionEntity);
+	SerializeEntities() {
+		return ActualEntities.ToImmutableList().ConvertAll(SerializeEntity);
 	}
 
 	/*
-	 * `MyDetectedEntityInfo` can't be used as the `TData` in IGC, so we convert it to 2D MyTuple. The 2D is used,
-	 * because the max tuple length is 6 while we need at least 9 to represent the `MyDetectedEntityInfo` properties + 1
-	 * to avoid the nullable `Vector3D? HitPosition` -> `Vector3D HitPosition`, `bool UsesRaycast`.
+	 * `MyDetectedEntityInfo` can't be used as the `TData` in IGC methods, so convert it to 2D `MyTuple`. The 2D is used,
+	 * because the max `MyTuple` length is 6 while needed at least 9 to represent the `MyDetectedEntityInfo` properties,
+	 * +1 to avoid the nullable `Vector3D? HitPosition` -> `Vector3D HitPosition`, `bool UsesRaycast`.
 	 */
 	MyTuple<
 		MyTuple<long, string, int, Vector3D, bool, MatrixD>,
 		MyTuple<Vector3, int, BoundingBoxD, long>>
-	SerializeVisionEntity(MyDetectedEntityInfo entity) {
+	SerializeEntity(MyDetectedEntityInfo entity) {
 		var HitPosition = entity.HitPosition ?? new Vector3D();
 		var UsesRaycast = entity.HitPosition == null;
 		return MyTuple.Create(
