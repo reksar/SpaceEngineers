@@ -26,32 +26,10 @@ public sealed class Program : MyGridProgram {
 
 	#region Radar
 
-	#region Settings
-	static readonly Color BACKGROUND = Color.Black;
-	static readonly Color PLANE_BACKGROUND = new Color(5, 5, 5, 255);
-	static readonly Color UI_COLOR = new Color(255, 255, 255, 20);
-	static readonly Color FRIEND_COLOR = Color.Green;
-	static readonly Color ENEMY_COLOR = Color.Red;
-	static readonly Color NEUTRAL_COLOR = Color.White;
-
-	// UI lines.
-	const float LINE_WIDTH = 0.5f;
-	// Line of the circle that represents specific radar range.
-	const float RANGE_CIRCLE_WIDTH = 0.2f;
-
-	// Size of a representation on the Radar plane.
-	static readonly Vector2 SMALL_GRID_SIZE = new Vector2(6);
-	static readonly Vector2 LARGE_GRID_SIZE = new Vector2(8);
-	static readonly Vector2 DEFAULT_ENTITY_SIZE = new Vector2(4);
-
-	// Front sector representing the view from a cockpit.
-	static readonly float FRONT_SECTOR_HALF_ANGLE = MathHelper.ToRadians(60 / 2);
-
-	// Cos of the radar plane angle relative to the LCD surface (radar plane is flat if angle is 0°).
-	static readonly float PROJECTION_COS = (float)Math.Cos(MathHelper.ToRadians(50));
+	// Settings
 
 	// NOTE: should be > 0!
-	const int MAX_RADAR_RANGE = 600; // m
+	const int MAX_RADAR_RANGE = 800; // m
 
 	// NOTE: should be sorted in descending order!
 	static readonly int[] PLANE_RANGES = { // m
@@ -61,7 +39,35 @@ public sealed class Program : MyGridProgram {
 		600, // small turret controller range
 		50, // sensor block range
 	};
-	#endregion // Settings
+
+	static readonly Color BACKGROUND = Color.Black;
+	static readonly Color PLANE_BACKGROUND = new Color(5, 5, 5, 255);
+	static readonly Color UI_COLOR = new Color(255, 255, 255, 20);
+	static readonly Color FRIEND_COLOR = Color.Green;
+	static readonly Color ENEMY_COLOR = Color.Red;
+	static readonly Color NEUTRAL_COLOR = Color.White;
+
+	const int UI_LINE_WIDTH = 1; // px
+
+	// Front sector representing the view from a cockpit.
+	static readonly float FRONT_SECTOR_HALF_ANGLE = MathHelper.ToRadians(60 / 2); // Sector 60°
+
+	// Cos of the radar *plane angle* relative to the front of LCD surface (flat if angle is 0°).
+	static readonly float PROJECTION_COS = (float)Math.Cos(MathHelper.ToRadians(50)); // Radar plane tilt is 50°
+
+	// WARN: not a setting! Do not change!
+	static readonly Vector2 PROJECTION_PLANE_SCALE = new Vector2(1, PROJECTION_COS);
+
+	// Entity Markers
+	const byte MARKER_COLOR_ALPHA = 15;
+	static readonly Vector2 MARKER_SIZE = new Vector2(6);
+	static MySprite MARKER_PLANE = new MySprite(SpriteType.TEXTURE, "Circle", size: MARKER_SIZE * PROJECTION_PLANE_SCALE);
+	static MySprite MARKER_VERTICAL = new MySprite(SpriteType.TEXTURE, "SquareSimple");
+	static MySprite MARKER_SMALL_GRID = new MySprite(SpriteType.TEXTURE, "Triangle", size: MARKER_SIZE);
+	static MySprite MARKER_LARGE_GRID = new MySprite(SpriteType.TEXTURE, "SquareSimple", size: MARKER_SIZE);
+	static MySprite MARKER_DEFAULT_TYPE = new MySprite(SpriteType.TEXTURE, "Circle", size: MARKER_SIZE - 2);
+
+	// End of Settings
 
 	// To receive entities detected by *Vision* script.
 	readonly IMyBroadcastListener Vision;
@@ -72,92 +78,95 @@ public sealed class Program : MyGridProgram {
 	class RadarLCD {
 		readonly IMyTextSurface LCD;
 		readonly LCDLayout Layout;
-		ImmutableList<MySprite> StaticUI;
+		readonly ImmutableList<MySprite> StaticUI;
+		MySpriteDrawFrame Frame;
 
-		public RadarLCD(IMyTextSurface lcd) {
+		public RadarLCD(IMyTextSurface surface) {
 
-			LCD = lcd;
+			LCD = surface;
 			LCD.Script = "";
 			LCD.ContentType = ContentType.SCRIPT;
 			LCD.ScriptBackgroundColor = BACKGROUND;
-
 			Layout = new LCDLayout(LCD);
-			StaticUI = Planes.Concat(FrontSector).ToImmutableList();
 
+			StaticUI = PlaneCircles().Concat(FrontSector()).ToImmutableList();
+			Prepare();
 			Draw();
 		}
 
-		/*
-		 * Draw the `StaticUI` only.
-		 */
+		public void Prepare() {
+			Frame = LCD.DrawFrame();
+			Frame.AddRange(StaticUI);
+		}
+
 		public void Draw() {
-			var Frame = LCD.DrawFrame();
-			Frame.AddRange(StaticUI);
 			Frame.Dispose();
 		}
 
 		/*
-		 * Draw entities on the radar with the `StaticUI`.
+		 * Adds the entity's marker sprites to the LCD `Frame`.
+		 * NOTE: the `position` must be relative to the radar and be fit into the radar orientation (WorldMatrix).
 		 */
-		public void Draw(IEnumerable<MySprite> sprites) {
-			var Frame = LCD.DrawFrame();
-			Frame.AddRange(StaticUI);
-			Frame.AddRange(sprites);
-			Frame.Dispose();
+		public void AddMarker(Vector3 position, MyDetectedEntityType type, MyRelationsBetweenPlayerAndBlock relation) {
+
+			// Marker projection on a radar plane.
+			var PlanePosition = new Vector2(position.X, position.Z);
+			var MarkerPosition = Layout.Center + PlanePosition * Layout.Scale;
+			var MarkerColor = RelationColor(relation);
+			MARKER_PLANE.Position = MarkerPosition;
+			MARKER_PLANE.Color = MarkerColor;
+			Frame.Add(MARKER_PLANE);
+
+			// Vertical line to indicate the height of the entity below/above the radar plane.
+			var Height = position.Y * Layout.Scale.Y * 2;
+			var HalfHeight = Height / 2;
+			MarkerPosition.Y -= HalfHeight;
+			MarkerColor.A = MARKER_COLOR_ALPHA;
+			MARKER_VERTICAL.Size = new Vector2(UI_LINE_WIDTH, Height);
+			MARKER_VERTICAL.Position = MarkerPosition;
+			MARKER_VERTICAL.Color = MarkerColor;
+			Frame.Add(MARKER_VERTICAL);
+
+			// Icon to indicate the entity type.
+			var Icon = TypeMarker(type);
+			MarkerPosition.Y -= HalfHeight;
+			Icon.Position = MarkerPosition;
+			Icon.Color = MarkerColor;
+			Frame.Add(Icon);
 		}
 
-		public void Draw(IEnumerable<RadarEntity> entities) {
-			Draw(entities.Select(EntitySprite));
-		}
-
-		MySprite EntitySprite(RadarEntity entity) {
-
-			Color SpriteColor;
-
-      switch (entity.Relation) {
+		Color RelationColor(MyRelationsBetweenPlayerAndBlock relation) {
+      switch (relation) {
 				case MyRelationsBetweenPlayerAndBlock.Owner:
 				case MyRelationsBetweenPlayerAndBlock.Friends:
 				case MyRelationsBetweenPlayerAndBlock.FactionShare:
-					SpriteColor = FRIEND_COLOR;
-					break;
+					return FRIEND_COLOR;
 				case MyRelationsBetweenPlayerAndBlock.Enemies:
-					SpriteColor = ENEMY_COLOR;
-					break;
+					return ENEMY_COLOR;
 				default:
-					SpriteColor = NEUTRAL_COLOR;
-					break;
+					return NEUTRAL_COLOR;
 			}
+		}
 
-			switch (entity.Type) {
+		MySprite TypeMarker(MyDetectedEntityType type) {
+      switch (type) {
 				case MyDetectedEntityType.SmallGrid:
-					return SmallGrid(entity.Position, entity.Height, SpriteColor);
+					return MARKER_SMALL_GRID;
 				case MyDetectedEntityType.LargeGrid:
-					return LargeGrid(entity.Position, entity.Height, SpriteColor);
+					return MARKER_LARGE_GRID;
 				default:
-					return DefaultEntity(entity.Position, entity.Height, SpriteColor);
+					return MARKER_DEFAULT_TYPE;
 			}
-		}
-
-		MySprite SmallGrid(Vector2 position, float height, Color color) {
-			return new MySprite(SpriteType.TEXTURE, "Triangle", Layout.Plane(position), SMALL_GRID_SIZE, color);
-		}
-
-		MySprite LargeGrid(Vector2 position, float height, Color color) {
-			return new MySprite(SpriteType.TEXTURE, "SquareSimple", Layout.Plane(position), LARGE_GRID_SIZE, color);
-		}
-
-		MySprite DefaultEntity(Vector2 position, float height, Color color) {
-			return new MySprite(SpriteType.TEXTURE, "Circle", Layout.Plane(position), DEFAULT_ENTITY_SIZE, color);
 		}
 
 		/*
-		 * The caliber of the radar ranges represented as concentric circles (planes) for each range.
+		 * Calibrated concentric circles (planes) represents the radar ranges.
 		 */
-		IEnumerable<MySprite> Planes { get {
+		IEnumerable<MySprite> PlaneCircles() {
 			var MaxPlane = RangePlane(MAX_RADAR_RANGE);
-			var RangePlanes = PLANE_RANGES.SkipWhile(range => range >= MAX_RADAR_RANGE).Select(RangePlane);
-			return RangePlanes.Aggregate(MaxPlane, (collection, plane) => collection.Concat(plane));
-		}}
+			var Planes = PLANE_RANGES.SkipWhile(range => range >= MAX_RADAR_RANGE).Select(RangePlane);
+			return Planes.Aggregate(MaxPlane, (planes, plane) => planes.Concat(plane));
+		}
 
 		/*
 		 * Two concentric circles (ellipses in projection): the ring representing the given `range` and its background.
@@ -167,7 +176,7 @@ public sealed class Program : MyGridProgram {
 			var Size = Layout.ProjectionPlaneSize * Scale;
 			var Circle = new MySprite(SpriteType.TEXTURE, "Circle", Layout.Center, Size, UI_COLOR);
 			yield return Circle;
-			Circle.Size -= RANGE_CIRCLE_WIDTH;
+			Circle.Size -= UI_LINE_WIDTH;
 			Circle.Color = PLANE_BACKGROUND;
 			yield return Circle;
 		}
@@ -179,13 +188,16 @@ public sealed class Program : MyGridProgram {
 		 *      \/
 		 *       * layout center
 		 */
-		IEnumerable<MySprite> FrontSector { get {
+		IEnumerable<MySprite> FrontSector() {
 			var ViewingRange = Layout.ProjectionPlaneSize.Y / 2;
 			yield return PlaneRadius(ViewingRange, FRONT_SECTOR_HALF_ANGLE);
 			yield return PlaneRadius(ViewingRange, -FRONT_SECTOR_HALF_ANGLE);
-		}}
+		}
 
 		/*
+		 * Radius from the center of the radar plane. The `length` is a radius of a plain radar circle. If the radar plane
+		 * is not plain, the `length` will be projected on the circle projection and become the radius of the ellipse.
+		 *
 		 * Radius `angle` is clockwise:
 		 *
 		 * normal
@@ -200,9 +212,9 @@ public sealed class Program : MyGridProgram {
 			var Cos = (float)Math.Cos(angle);
 			var A = Cos / length;
 			var B = (Sin / length) * PROJECTION_COS;
-			var R = 1 / (float)Math.Sqrt(Math.Pow(A, 2) + Math.Pow(B, 2));
-			var Size = new Vector2(LINE_WIDTH, R);
-			var Offset = new Vector2(Sin, -Cos) * R / 2;
+			var Radius = 1 / (float)Math.Sqrt(Math.Pow(A, 2) + Math.Pow(B, 2));
+			var Size = new Vector2(UI_LINE_WIDTH, Radius);
+			var Offset = new Vector2(Sin, -Cos) * Radius / 2;
 			var Position = Layout.Center + Offset;
 			return new MySprite(SpriteType.TEXTURE, "SquareSimple", Position, Size, UI_COLOR, rotation: angle);
 		}
@@ -214,7 +226,7 @@ public sealed class Program : MyGridProgram {
 		public readonly float Width;
 		public readonly Vector2 Center;
 		public readonly Vector2 ProjectionPlaneSize;
-		readonly Vector2 Scale;
+		public readonly Vector2 Scale;
 
 		/*
 		 * `LCD.SurfaceSize` - is the actual size of the visible screen. Can be square or rectangular.
@@ -247,63 +259,8 @@ public sealed class Program : MyGridProgram {
 			// `Width` is chosen to positioning in the big `LCD.TextureSize` square as the largest dimension.
 			Center = new Vector2(Padding + Width / 2);
 
-			ProjectionPlaneSize = new Vector2(Width, Height * PROJECTION_COS);
+			ProjectionPlaneSize = new Vector2(Width, Height) * PROJECTION_PLANE_SCALE;
 			Scale = ProjectionPlaneSize / (MAX_RADAR_RANGE * 2);
-		}
-
-		/*
-		 * Converts the actual `position` relative to the `Center` and scales it on the `MaxRadarPlane`.
-		 *
-		 * NOTE: expects that the `position.Y` is already inverted.
-		 */
-		public Vector2 Plane(Vector2 position) {
-			return Center + position * Scale;
-		}
-	}
-
-	/*
-	 * See `SerializeEntity` in the *Vision* script.
-	 */
-	struct VisionEntity {
-		// TODO: Modify Position here instead of creation `RadarEntity` instance.
-		public readonly Vector3 Position;
-		public readonly MyDetectedEntityType Type;
-		public readonly MyRelationsBetweenPlayerAndBlock Relation;
-
-		public static IEnumerable<VisionEntity> Collect(IMyBroadcastListener vision) {
-			return vision.AcceptMessage().As<
-					IEnumerable<
-						MyTuple<
-							MyTuple<long, string, int, Vector3D, bool, MatrixD>,
-							MyTuple<Vector3, int, BoundingBoxD, long>>>>()
-				.Select(serialized => new VisionEntity(serialized));
-		}
-
-		public VisionEntity(
-				MyTuple<
-					MyTuple<long, string, int, Vector3D, bool, MatrixD>,
-					MyTuple<Vector3, int, BoundingBoxD, long>>
-				serialized) {
-			Position = serialized.Item2.Item3.Center;
-			Type = (MyDetectedEntityType)serialized.Item1.Item3;
-			Relation = (MyRelationsBetweenPlayerAndBlock)serialized.Item2.Item2;
-		}
-	}
-
-	struct RadarEntity {
-		public readonly Vector2 Position;
-		public readonly float Height;
-		public readonly MyDetectedEntityType Type;
-		public readonly MyRelationsBetweenPlayerAndBlock Relation;
-		public RadarEntity(
-				Vector2 position,
-				float height,
-				MyDetectedEntityType type,
-				MyRelationsBetweenPlayerAndBlock relation) {
-			Position = position;
-			Height = height;
-			Type = type;
-			Relation = relation;
 		}
 	}
 
@@ -322,29 +279,15 @@ public sealed class Program : MyGridProgram {
 		}
 
 		public bool InRadarRange(Vector3 position) {
-			return RelativePosition(position).Length() < MAX_RADAR_RANGE;
+			return position.Length() < MAX_RADAR_RANGE;
 		}
 
 		public Vector3 RelativePosition(Vector3 position) {
 			return position - Anchor.GetPosition();
 		}
 
-		public Vector3 Project(Vector3 position) {
+		public Vector3 FitPosition(Vector3 position) {
 			return Vector3.TransformNormal(position, Matrix.Transpose(Anchor.WorldMatrix));
-		}
-
-		/*
-		 * Position of the `projected` on a surface. The third coordinate (Y) is the height (above or below) a surface.
-		 * 
-		 * NOTE: the `projected.Z` or resulting `Vector2.Y` is actually inverted, but this will be handy further to calc
-		 * the `Layout.Plane` position.
-		 */
-		public Vector2 ProjectedPosition(Vector3 projected) {
-			return new Vector2(projected.X, projected.Z);
-		}
-
-		public float ProjectedHeight(Vector3 projected) {
-			return projected.Y;
 		}
 	}
 
@@ -353,27 +296,40 @@ public sealed class Program : MyGridProgram {
 	public Program() {
 		Runtime.UpdateFrequency = UpdateFrequency.Update10;
 		Vision = IGC.RegisterBroadcastListener("Vision");
-		Nav = new Navigation(GridTerminalSystem, Me);
 		LCDs = SelectLCDs().ConvertAll(LCD => new RadarLCD(LCD));
+		Nav = new Navigation(GridTerminalSystem, Me);
 	}
 
 	public void Main(string argument, UpdateType updateSource) {
-		// TODO: filter entities with nested bounding boxes.
-		// TODO: try to create common sprites that should be scaled on drawing.
-		var Entities = VisionEntity.Collect(Vision).Where(InRadarRange).Select(ToRadarEntity);
-		LCDs.ForEach(LCD => LCD.Draw(Entities));
+		// TODO: Nav.Update();
+		LCDs.ForEach(LCD => LCD.Prepare());
+		LCDsFillWithVision();
+		LCDs.ForEach(LCD => LCD.Draw());
 	}
 
-	bool InRadarRange(VisionEntity entity) {
-		return Nav.InRadarRange(entity.Position);
-	}
+	void LCDsFillWithVision() {
 
-	RadarEntity ToRadarEntity(VisionEntity entity) {
-		var RelativePosition = Nav.RelativePosition(entity.Position);
-		var Projection = Nav.Project(RelativePosition);
-		var PlanePosition = Nav.ProjectedPosition(Projection);
-		var Height = Nav.ProjectedHeight(Projection);
-		return new RadarEntity(PlanePosition, Height, entity.Type, entity.Relation);
+		// See `SerializeEntity` in the *Vision* script.
+		Vision.AcceptMessage()
+
+			.As<
+				ImmutableList<
+					MyTuple<
+						MyTuple<long, string, int, Vector3D, bool, MatrixD>,
+						MyTuple<Vector3, int, BoundingBoxD, long>>>>()
+
+			.ForEach(tuple => {
+
+				var EntityBounds = tuple.Item2.Item3;
+				var Position = Nav.RelativePosition(EntityBounds.Center);
+
+				if (Nav.InRadarRange(Position)) {
+					LCDs.ForEach(LCD => LCD.AddMarker(
+						Nav.FitPosition(Position),
+						(MyDetectedEntityType)tuple.Item1.Item3,
+						(MyRelationsBetweenPlayerAndBlock)tuple.Item2.Item2));
+				}
+			});
 	}
 
 	List<IMyTextSurface> SelectLCDs() {
