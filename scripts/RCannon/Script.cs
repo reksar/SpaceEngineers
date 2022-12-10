@@ -11,6 +11,7 @@ using VRage;
 using VRage.Game;
 using VRage.Collections;
 using VRage.Game.Components;
+using VRage.Game.GUI.TextPanel;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Game.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
@@ -67,15 +68,16 @@ public sealed class Program : MyGridProgram {
 
 		State = FitSpring;
 
+		// Gives targets.
 		Vision = IGC.RegisterBroadcastListener("Vision");
 
 		// LCD will be used to show targets.
 		MeLCD = Me.GetSurface(0);
-		MeLCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+		MeLCD.ContentType = ContentType.TEXT_AND_IMAGE;
 
 		// Keyboard LCD will be used as indicator.
 		MeKeyLCD = Me.GetSurface(1);
-		MeKeyLCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+		MeKeyLCD.ContentType = ContentType.TEXT_AND_IMAGE;
 	}
 
 	public void Main(string argument, UpdateType updateSource) {

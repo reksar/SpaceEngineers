@@ -9,6 +9,7 @@ using VRage;
 using VRage.Collections;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ObjectBuilders.Definitions;
 using SpaceEngineers.Game.ModAPI.Ingame;
