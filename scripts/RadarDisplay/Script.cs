@@ -268,6 +268,8 @@ public sealed class Program : MyGridProgram {
 
 	class Navigation {
 		readonly IMyEntity Anchor;
+		Vector3 Position;
+		Matrix Rotated;
 
 		/*
 		 * If there is no main Cockpit, the current Programmable Block is used instead. Mind the block orientation!
@@ -278,16 +280,21 @@ public sealed class Program : MyGridProgram {
 			Anchor = cockpits.Count > 0 ? cockpits.First<IMyEntity>() : (IMyEntity)me;
 		}
 
+		public void Update() {
+			Position = Anchor.GetPosition();
+			Rotated = Matrix.Transpose(Anchor.WorldMatrix);
+		}
+
 		public bool InRadarRange(Vector3 position) {
 			return position.Length() < MAX_RADAR_RANGE;
 		}
 
 		public Vector3 RelativePosition(Vector3 position) {
-			return position - Anchor.GetPosition();
+			return position - Position;
 		}
 
 		public Vector3 FitPosition(Vector3 position) {
-			return Vector3.TransformNormal(position, Matrix.Transpose(Anchor.WorldMatrix));
+			return Vector3.TransformNormal(position, Rotated);
 		}
 	}
 
@@ -301,7 +308,7 @@ public sealed class Program : MyGridProgram {
 	}
 
 	public void Main(string argument, UpdateType updateSource) {
-		// TODO: Nav.Update();
+		Nav.Update();
 		LCDs.ForEach(LCD => LCD.Prepare());
 		LCDsFillWithVision();
 		LCDs.ForEach(LCD => LCD.Draw());
