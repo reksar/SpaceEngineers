@@ -7,7 +7,7 @@ set PNG=thumb.png
 
 set git_dir=
 
-for /f %%i in ('where git 2^>NUL') do (
+for /f "usebackq delims=" %%i in (`where git 2^>NUL`) do (
   set git_dir=%%~dpi..
 )
 
