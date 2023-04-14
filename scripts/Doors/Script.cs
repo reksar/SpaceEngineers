@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 // Space Engineers DLLs
 using Sandbox.ModAPI.Ingame;
@@ -66,7 +65,6 @@ Dictionary<IMyDoor, DateTime> X = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, DateTime> Y = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, IMyDoor> Z = new Dictionary<IMyDoor, IMyDoor>();
 Dictionary<IMyDoor, int> a = new Dictionary<IMyDoor, int>();
-string[] b = {"/", "-", "\\", "|"};
 DateTime c = new DateTime();
 int e = 0;
 
@@ -81,7 +79,6 @@ void Main() {
     K();
   }
   Q();
-  R();
   c += Runtime.TimeSinceLastRun;
   if (e >= 99) {
     e = 0;
@@ -198,28 +195,4 @@ void Q() {
   }
 }
 
-void R() {
-  StringBuilder A = new StringBuilder("Isy's Simple Doors "+b[e%4]+"\n================\n\n");
-  A.Append("Refreshing cached doors in: "+Math.Ceiling((double)(99 - e)/6)+"s\n\n");
-  A.Append("Managed doors: "+T.Count+"\n");
-  A.Append("Door close seconds: "+autoCloseSeconds+"\n");
-  if(autoCloseHangarDoors) {
-    A.Append("Hangar door close seconds: "+autoCloseHangarDoorsSeconds+"\n");
-  }
-  if (manageAirlocks) {
-    A.Append("\n");
-    A.Append("Airlocks: "+Z.Count/2+"\n");
-    A.Append("Airlock delay seconds: "+airlockDelaySeconds+"\n");
-    A.Append("Airlock protection: "+(protectAirlock ? "true" : "false"));
-    A.Append("\n");
-  }
-  if (V.Count > 0) {
-    A.Append("\n");
-    A.Append("Damaged doors: "+V.Count+"\n");
-    foreach(var C in V) {
-      A.Append("- "+C.CustomName+"\n");
-    }
-  }
-  Echo(A.ToString());
-}
 }
