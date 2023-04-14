@@ -15,10 +15,9 @@ using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ObjectBuilders.Definitions;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
+namespace Doors {
 public sealed class Program : MyGridProgram {
-
-// --- Door Auto Close ---
-// =======================================================================================
+#region Doors
 
 // The script will automatically close a door 1 seconds after it's being opened. Change this value here if needed:
 double autoCloseSeconds = 1;
@@ -195,4 +194,5 @@ void Q() {
   }
 }
 
-}
+#endregion // Doors
+}}
