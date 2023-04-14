@@ -68,11 +68,11 @@ Dictionary<IMyDoor, int> a = new Dictionary<IMyDoor, int>();
 DateTime c = new DateTime();
 int e = 0;
 
-Program() {
-  Runtime.UpdateFrequency = UpdateFrequency.Update10;
+public Program() {
+  Runtime.UpdateFrequency = UpdateFrequency.Update100;
 }
 
-void Main() {
+public void Main() {
   if (e == 0) S();
   if (manageAirlocks) {
     if (e == 0) D();
