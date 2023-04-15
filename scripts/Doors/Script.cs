@@ -22,12 +22,12 @@ public sealed class Program : MyGridProgram {
 
 // --- Door Auto Close ---
 
-// The script will automatically close a door 1 seconds after it's being opened. Change this value here if needed:
-double autoCloseSeconds = 1;
+// The script will automatically close a door `DELAY` milliseconds after it's being opened.
+const double DOOR_DELAY = 1000; // ms
 
 // Should hangar doors also be closed and after which time?
-bool autoCloseHangarDoors = true;
-double autoCloseHangarDoorsSeconds = 10;
+const bool MANAGE_HANGARS = true;
+const double HANGAR_DELAY = 10000; // ms
 
 // If you don't want to auto close specific doors, add the manual door keyword to their names
 // Note: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
@@ -39,17 +39,18 @@ const string MANUAL_DOOR = "!Manual";
 // By default, the script will try to find airlocks (two doors close to each other) and manage them. It will close
 // the just opened door first, then open the other one and close it again (all depending on autoCloseSeconds).
 // If you don't want this functionality, set this main trigger to false:
-bool manageAirlocks = true;
+const bool MANAGE_AIRLOCKS = true;
 
 // The script will detect airlocks within this block radius of a just opened door (like back to back sliding doors).
-const int AIRLOCK_RADIUS = 1;
+const int AIRLOCK_RADIUS = 1; // blocks
 
 // To protect the airlock from being opened too early, the script deactivates the second door until the first one is
 // closed. To change this behavior, set the following value to `false`:
-bool protectAirlock = true;
+const bool PROTECT_AIRLOCK = true;
 
-// You can add an additional delay (in seconds) between closing the first airlock door and opening the second one (Default: 0).
-double airlockDelaySeconds = 0;
+// You can add an additional delay (in seconds) between closing the first airlock door and opening the second one.
+// Default is 0.
+const double AIRLOCK_DELAY = 0; // ms
 
 // If two nearby doors are accidentally treated as an airlock but are in fact just regular doors, you can add this
 // keyword to one or both door's names to disable airlock functionality (autoclose still works).
@@ -58,7 +59,7 @@ const string NO_AIRLOCK = "!NoAirlock";
 
 
 // NOTE: still 99 iterations, even after decreasing the update frequency by x10.
-const int BLOCKS_UPDATING_RATE = 99; // Iterations
+const int REFRESH_RATE = 99; // iterations
 
 int IterationCount = 0;
 int ManagedDoorsCount = 0;
@@ -87,13 +88,13 @@ public Program() {
 
 public void Main() {
   if (IterationCount == 0) UpdateDoors();
-  if (manageAirlocks) {
+  if (MANAGE_AIRLOCKS) {
     if (IterationCount == 0) UpdateAirlocks();
     ManageAirlocks();
   }
   ManageDoors();
   Time += Runtime.TimeSinceLastRun;
-  if (BLOCKS_UPDATING_RATE <= ++IterationCount) IterationCount = 0;
+  if (REFRESH_RATE <= ++IterationCount) IterationCount = 0;
   ShowStatus();
 }
 
@@ -111,7 +112,7 @@ void UpdateDoors() {
 bool SelectDoor (IMyDoor door) {
   if (!door.IsSameConstructAs(Me)) return false;
   if (door.CustomName.Contains(MANUAL_DOOR)) return false;
-  if (!autoCloseHangarDoors && door is IMyAirtightHangarDoor) return false;
+  if (!MANAGE_HANGARS && door is IMyAirtightHangarDoor) return false;
   if (!door.IsFunctional) {
     BrokenDoorsCount++;
     return false;
@@ -147,9 +148,9 @@ void ManageAirlocks() {
   foreach (var door_pair in Airlocks) {
     var door = door_pair.Key;
     var sibling = door_pair.Value;
-    var need_to_close = OpenAirlocks.ContainsKey(door) ? (Time - OpenAirlocks[door]).TotalMilliseconds >= airlockDelaySeconds * 1000 : true;
+    var need_to_close = OpenAirlocks.ContainsKey(door) ? (Time - OpenAirlocks[door]).TotalMilliseconds >= AIRLOCK_DELAY : true;
     var phase = OpenAirlocksPhase.ContainsKey(door) ? OpenAirlocksPhase[door] : 0;
-    if (protectAirlock) {
+    if (PROTECT_AIRLOCK) {
       if (door.Status != DoorStatus.Closed || !need_to_close || phase == 1) {
         sibling.Enabled = false;
       } else {
@@ -157,9 +158,7 @@ void ManageAirlocks() {
       }
     }
     if (OpenAirlocksPhase.ContainsKey(sibling)) continue;
-    if (door.Status == DoorStatus.Open) {
-      OpenAirlocksPhase[door] = 1;
-    }
+    if (door.Status == DoorStatus.Open) OpenAirlocksPhase[door] = 1;
     if (OpenAirlocksPhase.ContainsKey(door)) {
       if (OpenAirlocksPhase[door] == 1 && door.Status == DoorStatus.Closed) {
         OpenAirlocks[door] = Time;
@@ -179,25 +178,18 @@ void ManageAirlocks() {
 }
 
 void ManageDoors() {
-  foreach (var door in ManagedDoors) {
-    if (door.Status == DoorStatus.Open) {
-      if (!OpenDoors.ContainsKey(door)) {
-        OpenDoors[door] = door is IMyAdvancedDoor ? Time + TimeSpan.FromSeconds(1) : Time;
-        continue;
-      }
-      if (door is IMyAirtightHangarDoor) {
-        if((Time - OpenDoors[door]).TotalMilliseconds >= autoCloseHangarDoorsSeconds * 1000) {
-          door.CloseDoor();
-          OpenDoors.Remove(door);
-        }
-      } else {
-        if((Time - OpenDoors[door]).TotalMilliseconds >= autoCloseSeconds * 1000) {
-          door.CloseDoor();
-          OpenDoors.Remove(door);
-        }
+  ManagedDoors.FindAll(door => door.Status == DoorStatus.Open).ForEach(door => {
+    if (!OpenDoors.ContainsKey(door)) {
+      OpenDoors[door] = door is IMyAdvancedDoor ? Time + TimeSpan.FromSeconds(1) : Time;
+    } else {
+      var time_passed = (Time - OpenDoors[door]).TotalMilliseconds;
+      var time_limit = door is IMyAirtightHangarDoor ? HANGAR_DELAY : DOOR_DELAY;
+      if (time_limit <= time_passed) {
+        door.CloseDoor();
+        OpenDoors.Remove(door);
       }
     }
-  }
+  });
 }
 
 void ShowStatus() {
