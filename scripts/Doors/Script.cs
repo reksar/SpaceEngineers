@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Collections.Generic;
 
 // Space Engineers DLLs
@@ -63,18 +64,28 @@ string noAirlockKeyword = "!noAirlock";
 
 
 int IterationCount = 0;
-int ControlledDoorsCount = 0;
+int ManagedDoorsCount = 0;
+int BrokenDoorsCount = 0;
 DateTime Time = new DateTime();
-List<IMyDoor> ControlledDoors = new List<IMyDoor>();
-List<IMyDoor> BrokenDoors = new List<IMyDoor>();
-List<IMyDoor> Doors = new List<IMyDoor>(); // TODO: make it local to the function?
+List<IMyDoor> ManagedDoors = new List<IMyDoor>();
 Dictionary<IMyDoor, DateTime> OpenDoors = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, IMyDoor> Airlocks = new Dictionary<IMyDoor, IMyDoor>();
 Dictionary<IMyDoor, DateTime> OpenAirlocks = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, int> OpenAirlocksPhase = new Dictionary<IMyDoor, int>();
 
+StringBuilder Status = new StringBuilder();
+
+// To show the `Status`.
+IMyTextSurface LCD;
+
 public Program() {
+
   Runtime.UpdateFrequency = UpdateFrequency.Update100;
+
+  LCD = Me.GetSurface(0);
+  LCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+  LCD.FontColor = Color.White;
+  LCD.BackgroundColor = Color.Black;
 }
 
 public void Main() {
@@ -86,27 +97,28 @@ public void Main() {
   ManageDoors();
   Time += Runtime.TimeSinceLastRun;
   if (BLOCKS_UPDATING_RATE <= ++IterationCount) IterationCount = 0;
+  ShowStatus();
 }
 
 void UpdateDoors() {
-  BrokenDoors.Clear();
-  GridTerminalSystem.GetBlocksOfType(ControlledDoors, DoorToControl);
-  if (ControlledDoors.Count != ControlledDoorsCount) {
-    ControlledDoorsCount = ControlledDoors.Count;
+  BrokenDoorsCount = 0;
+  GridTerminalSystem.GetBlocksOfType(ManagedDoors, SelectDoor);
+  if (ManagedDoors.Count != ManagedDoorsCount) {
+    ManagedDoorsCount = ManagedDoors.Count;
     OpenDoors.Clear();
     Airlocks.Clear();
     OpenAirlocksPhase.Clear();
   }
 }
 
-bool DoorToControl (IMyDoor door) {
+bool SelectDoor (IMyDoor door) {
   if (!door.IsSameConstructAs(Me)) return false;
-  if (!door.IsFunctional) {
-    BrokenDoors.Add(door);
-    return false;
-  }
   if (door.CustomName.Contains(manualDoorKeyword)) return false;
   if (!autoCloseHangarDoors && door is IMyAirtightHangarDoor) return false;
+  if (!door.IsFunctional) {
+    BrokenDoorsCount++;
+    return false;
+  }
   return true;
 }
 
@@ -115,9 +127,8 @@ void UpdateAirlocks() {
   float distance = 0;
   float min_distance = float.MaxValue;
   int closest_door_idx = -1;
-  Doors.Clear();
   Airlocks.Clear();
-  Doors = ControlledDoors.FindAll(I => !(I is IMyAirtightHangarDoor));
+  var Doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor));
   foreach (var door in Doors) {
     if (door.CustomName.Contains(noAirlockKeyword)) continue;
     position = door.Position;
@@ -141,12 +152,12 @@ void UpdateAirlocks() {
 
 void ManageAirlocks() {
   foreach (var door_pair in Airlocks) {
-    IMyDoor door = door_pair.Key;
-    IMyDoor sibling = door_pair.Value;
-    bool NeedToClose = OpenAirlocks.ContainsKey(door) ? (Time - OpenAirlocks[door]).TotalMilliseconds >= airlockDelaySeconds * 1000 : true;
-    int phase = OpenAirlocksPhase.ContainsKey(door) ? OpenAirlocksPhase[door] : 0;
+    var door = door_pair.Key;
+    var sibling = door_pair.Value;
+    var need_to_close = OpenAirlocks.ContainsKey(door) ? (Time - OpenAirlocks[door]).TotalMilliseconds >= airlockDelaySeconds * 1000 : true;
+    var phase = OpenAirlocksPhase.ContainsKey(door) ? OpenAirlocksPhase[door] : 0;
     if (protectAirlock) {
-      if (door.Status != DoorStatus.Closed || !NeedToClose || phase == 1) {
+      if (door.Status != DoorStatus.Closed || !need_to_close || phase == 1) {
         sibling.Enabled = false;
       } else {
         sibling.Enabled = true;
@@ -162,7 +173,7 @@ void ManageAirlocks() {
         OpenAirlocksPhase[door] = 2;
         continue;
       }
-      if(OpenAirlocksPhase[door] == 2 && NeedToClose) {
+      if(OpenAirlocksPhase[door] == 2 && need_to_close) {
         OpenAirlocks.Remove(door);
         OpenAirlocksPhase[door] = 3;
         sibling.OpenDoor();
@@ -175,7 +186,7 @@ void ManageAirlocks() {
 }
 
 void ManageDoors() {
-  foreach (var door in ControlledDoors) {
+  foreach (var door in ManagedDoors) {
     if (door.Status == DoorStatus.Open) {
       if (!OpenDoors.ContainsKey(door)) {
         OpenDoors[door] = door is IMyAdvancedDoor ? Time + TimeSpan.FromSeconds(1) : Time;
@@ -194,6 +205,20 @@ void ManageDoors() {
       }
     }
   }
+}
+
+void ShowStatus() {
+
+  Status.Clear();
+
+  Status.Append("Managed doors: "+ManagedDoorsCount);
+  if (0 < BrokenDoorsCount) Status.Append("("+BrokenDoorsCount+" broken)");
+  Status.Append("\n");
+
+  Status.Append("Airlocks: "+(Airlocks.Count / 2)+"\n");
+
+  LCD.WriteText(Status);
+  Echo(Status.ToString());
 }
 
 #endregion // Doors
