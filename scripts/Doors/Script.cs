@@ -20,11 +20,7 @@ namespace Doors {
 public sealed class Program : MyGridProgram {
 #region Doors
 
-// NOTE: still 99 iterations, even after decreasing the update frequency by x10.
-const int BLOCKS_UPDATING_RATE = 99; // Iterations
-
 // --- Door Auto Close ---
-// =======================================================================================
 
 // The script will automatically close a door 1 seconds after it's being opened. Change this value here if needed:
 double autoCloseSeconds = 1;
@@ -35,33 +31,34 @@ double autoCloseHangarDoorsSeconds = 10;
 
 // If you don't want to auto close specific doors, add the manual door keyword to their names
 // Note: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
-string manualDoorKeyword = "!manual";
+const string MANUAL_DOOR = "!Manual";
 
 
 // --- Simple Airlock ---
-// =======================================================================================
 
 // By default, the script will try to find airlocks (two doors close to each other) and manage them. It will close
 // the just opened door first, then open the other one and close it again (all depending on autoCloseSeconds).
 // If you don't want this functionality, set this main trigger to false:
 bool manageAirlocks = true;
 
-// The script will detect airlocks within a 2 block radius of a just opened door (like back to back sliding doors).
-// Change this value, if your airlocks are wider:
-int airlockRadius = 1;
+// The script will detect airlocks within this block radius of a just opened door (like back to back sliding doors).
+const int AIRLOCK_RADIUS = 1;
 
-// To protect the airlock from being opened too early, the script deactivates the second door until the first one is closed
-// To change this behavior, set the following value to false:
+// To protect the airlock from being opened too early, the script deactivates the second door until the first one is
+// closed. To change this behavior, set the following value to `false`:
 bool protectAirlock = true;
 
 // You can add an additional delay (in seconds) between closing the first airlock door and opening the second one (Default: 0).
 double airlockDelaySeconds = 0;
 
-// If two nearby doors are accidentally treated as an airlock but are in fact just regular doors, you can add this keyword
-// to one or both door's names to disable airlock functionality (autoclose still works).
-// Note: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
-string noAirlockKeyword = "!noAirlock";
+// If two nearby doors are accidentally treated as an airlock but are in fact just regular doors, you can add this
+// keyword to one or both door's names to disable airlock functionality (autoclose still works).
+// NOTE: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
+const string NO_AIRLOCK = "!NoAirlock";
 
+
+// NOTE: still 99 iterations, even after decreasing the update frequency by x10.
+const int BLOCKS_UPDATING_RATE = 99; // Iterations
 
 int IterationCount = 0;
 int ManagedDoorsCount = 0;
@@ -113,7 +110,7 @@ void UpdateDoors() {
 
 bool SelectDoor (IMyDoor door) {
   if (!door.IsSameConstructAs(Me)) return false;
-  if (door.CustomName.Contains(manualDoorKeyword)) return false;
+  if (door.CustomName.Contains(MANUAL_DOOR)) return false;
   if (!autoCloseHangarDoors && door is IMyAirtightHangarDoor) return false;
   if (!door.IsFunctional) {
     BrokenDoorsCount++;
@@ -123,29 +120,25 @@ bool SelectDoor (IMyDoor door) {
 }
 
 void UpdateAirlocks() {
-  Vector3 position = new Vector3();
-  float distance = 0;
-  float min_distance = float.MaxValue;
-  int closest_door_idx = -1;
+  float distance;
+  float min_distance;
+  int closest_door_idx;
+  var doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor || door.CustomName.Contains(NO_AIRLOCK)));
   Airlocks.Clear();
-  var Doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor));
-  foreach (var door in Doors) {
-    if (door.CustomName.Contains(noAirlockKeyword)) continue;
-    position = door.Position;
+  foreach (var door in doors) {
     min_distance = float.MaxValue;
     closest_door_idx = -1;
-    for (int i = 0; i < Doors.Count; i++) {
-      if (Doors[i] == door) continue;
-      if (Doors[i].CustomName.Contains(noAirlockKeyword)) continue;
-      distance = Vector3.Distance(position, Doors[i].Position);
-      if (distance <= airlockRadius && distance < min_distance) {
+    for (int i = 0; i < doors.Count; i++) {
+      if (doors[i] == door) continue;
+      distance = Vector3.Distance(door.Position, doors[i].Position);
+      if (distance <= AIRLOCK_RADIUS && distance < min_distance) {
         min_distance = distance;
         closest_door_idx = i;
         if (distance == 1) break;
       }
     }
     if (closest_door_idx >= 0) {
-      Airlocks[door] = Doors[closest_door_idx];
+      Airlocks[door] = doors[closest_door_idx];
     }
   }
 }
