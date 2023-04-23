@@ -285,17 +285,5 @@ public sealed class Program : MyGridProgram {
     return radians < 0 ? (radians % MathHelper.TwoPi + MathHelper.TwoPi) : (radians % MathHelper.TwoPi);
   }
 
-  /*
-   * Returns a value with the `magnitude` and the `sign`.
-   * NOTE: `Math.CopySign` is not allowed inside a script!
-   */
-  float CopySign(float magnitude, float sign) {
-    return IsNegative(magnitude) == IsNegative(sign) ? magnitude : -magnitude;
-  }
-
-  bool IsNegative(double value) {
-    return Math.Sign(value) == -1;
-  }
-
   #endregion // RapidGun
 }}
