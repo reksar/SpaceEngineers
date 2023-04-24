@@ -24,24 +24,30 @@ public sealed class Program : MyGridProgram {
 
   #region RapidGun
 
+  // Gun System {{{
+  IMyPistonBase Piston;
+  IMyMotorAdvancedStator Rotor;
+  IMyUserControllableGun CurrentGun;
+  List<List<IMyUserControllableGun>> GunPlanes;
+  int CurrentPlaneIdx;
+  // Gun System }}}
+
+  float BlockSize; // m
+
   // Precision to compare the direction of 3D vectors.
   const double EPSILON = 0.006;
 
-  ImmutableList<Vector3I> RING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
+  const float MAX_ROTOR_TORQUE = 1000000000; // N*m
+
+  // Directions on a 2D plane.
+  ImmutableList<Vector3I> PLANE_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
     Vector3I.Forward, Vector3I.Right, Vector3I.Backward, Vector3I.Left
   });
 
-  // 0°, 90°, 180°, 270°, 360°
+  // Represents the working positions of the gun barrel: 0°, 90°, 180°, 270°, 360°.
   ImmutableList<float> ANGLE_CALIBRE = ImmutableList.Create(new float[] {
     0, MathHelper.PiOver2, MathHelper.Pi, 3 * MathHelper.PiOver2, MathHelper.TwoPi
   });
-
-  IMyPistonBase Piston;
-  IMyMotorAdvancedStator Rotor;
-  List<List<IMyUserControllableGun>> GunRings = new List<List<IMyUserControllableGun>>();
-  IMyUserControllableGun CurrentGun;
-  int CurrentRingIdx;
-  float BlockSize; // m
 
   StringBuilder Status = new StringBuilder();
   IMyTextSurface LCD;
@@ -53,9 +59,7 @@ public sealed class Program : MyGridProgram {
 		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
     LCD.BackgroundColor = Color.Black;
 
-    SelectBlocks();
-
-    if (GunRings.Count > 0) Init();
+    if (BlockGroups().FirstOrDefault(SetGunSystem) != null) Init();
   }
 
   void Main(string argument, UpdateType updateSource) {
@@ -82,8 +86,12 @@ public sealed class Program : MyGridProgram {
     return Rotor.Angle == Rotor.UpperLimitRad;
   }}
 
+  List<IMyUserControllableGun> CurrentGunPlane { get {
+    return GunPlanes[CurrentPlaneIdx];
+  }}
+
   IMyUserControllableGun FindGunInCurrentFireDirection() {
-    return GunRings[CurrentRingIdx].Find(gun => gun.WorldMatrix.Forward.Equals(FireDirection, EPSILON));
+    return CurrentGunPlane.Find(gun => gun.WorldMatrix.Forward.Equals(FireDirection, EPSILON));
   }
 
   void Slide() {
@@ -113,11 +121,11 @@ public sealed class Program : MyGridProgram {
     var k = (float)Math.Sin(delta * delta / MathHelper.TwoPi);
 
     // TODO: move
-    Rotor.Torque = 1000000000 * Math.Abs(k);
-    Rotor.BrakingTorque = 1000000000 - Rotor.Torque - 40000;
+    Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(k);
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque - 40000;
 
     // NOTE: max rotor velocity is ±π rad/s
-    return MathHelper.Pi * k * 3;
+    return MathHelper.Pi * MathHelper.Pi * k;
   }
 
   void PrepareGun() {
@@ -136,9 +144,9 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetNextGun() {
-    var ready_guns = GunRings[CurrentRingIdx].FindAll(gun => !gun.IsShooting);
+    var ready_guns = CurrentGunPlane.FindAll(gun => !gun.IsShooting);
     if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
-    else SetNextRing();
+    else SetNextGunPlane();
   }
 
   void SetNextRotorAngle(List<IMyUserControllableGun> guns) {
@@ -182,31 +190,29 @@ public sealed class Program : MyGridProgram {
 
     SavedStatus = Status.ToString();
 
-    SetRotorLimitRad(next_angle);
+    BarrelAngle = next_angle;
   }
 
-  void SetRotorLimitRad(float radians) {
-    if (radians < Rotor.LowerLimitRad) {
-      Rotor.LowerLimitRad = radians;
-      Rotor.UpperLimitRad = radians;
+  float BarrelAngle { set {
+    if (value < Rotor.LowerLimitRad) {
+      Rotor.LowerLimitRad = value;
+      Rotor.UpperLimitRad = value;
     } else {
-      Rotor.UpperLimitRad = radians;
-      Rotor.LowerLimitRad = radians;
+      Rotor.UpperLimitRad = value;
+      Rotor.LowerLimitRad = value;
     }
-  }
+  }}
 
   float AngleCalibre(float radians) {
     var angle = ANGLE_CALIBRE.MinBy(calibre => Math.Abs(calibre - radians));
     return angle < MathHelper.TwoPi ? angle : 0;
   }
 
-  void SetNextRing() {
+  void SetNextGunPlane() {
     // TODO:
   }
 
   void Init() {
-
-    Runtime.UpdateFrequency = UpdateFrequency.Update10;
 
     BlockSize = Me.CubeGrid.GridSize;
 
@@ -214,61 +220,54 @@ public sealed class Program : MyGridProgram {
     Piston.MaxLimit = 0;
     Piston.Velocity = -Piston.MaxVelocity;
 
-    Rotor.TargetVelocityRad = 0;
     Rotor.Displacement = -0.3f; // m
-    Rotor.Torque = 2000000; // N*m
-    Rotor.BrakingTorque = 500000000; // N*m
-    SetRotorLimitRad(0);
+    Rotor.TargetVelocityRad = 0;
+    Rotor.Torque = 0;
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
     Rotor.RotorLock = true;
+    BarrelAngle = 0;
 
-    GunRings.ForEach(ring => ring.ForEach(gun => gun.Enabled = false));
-    CurrentRingIdx = 0;
+    GunPlanes.ForEach(ring => ring.ForEach(gun => gun.Enabled = false));
+    CurrentPlaneIdx = 0;
     CurrentGun = null;
+
+    Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
 
-   void SelectBlocks() {
+  bool SetGunSystem(IMyBlockGroup group) {
 
-    var my_groups = new List<IMyBlockGroup>();
-    GridTerminalSystem.GetBlockGroups(my_groups, group =>
-      Select<IMyProgrammableBlock>(group, block => block == Me).Count == 1);
+    var me = Select<IMyProgrammableBlock>(group, block => block == Me);
+    if (me.Count != 1) return false;
 
-    var piston_and_rotor = my_groups
-      .Select(group => MyTuple.Create(
-        Select<IMyPistonBase>(group).FirstOrDefault(),
-        Select<IMyMotorAdvancedStator>(group).FirstOrDefault()
-      ))
-      .FirstOrDefault(tuple => tuple.Item1 != null && tuple.Item2 != null);
+    var pistons = Select<IMyPistonBase>(group);
+    if (pistons.Count != 1) return false;
 
-    Piston = piston_and_rotor.Item1;
-    Rotor = piston_and_rotor.Item2;
+    var rotors = Select<IMyMotorAdvancedStator>(group);
+    if (rotors.Count != 1) return false;
 
-    SelectGuns();
+    Piston = pistons.First();
+    Rotor = rotors.First();
+    GunPlanes = GoUp().Select(Guns).TakeWhile(guns => guns.Count > 0).Reverse().ToList();
+
+    return GunPlanes.Count > 0;
   }
 
-  void SelectGuns() {
-
-    if (Rotor == null) return;
-
-    var grid = Rotor.TopGrid;
-    var axis = Vector3I.Up;
-    var guns = GunRing(grid, axis);
-
-    while (guns.Count > 0) {
-      GunRings.Add(guns);
-      axis += Vector3I.Up;
-      guns = GunRing(grid, axis);
-    }
-
-    GunRings.Reverse();
-  }
-
-  List<IMyUserControllableGun> GunRing(IMyCubeGrid grid, Vector3I axis) {
-    return RING_DIRECTIONS
-      .Select(direction => grid.GetCubeBlock(axis + direction))
-      .Where(block => block != null)
-      .Select(block => block.FatBlock as IMyUserControllableGun)
-      .Where(gun => gun != null)
+  List<IMyUserControllableGun> Guns(Vector3I plane_center) {
+    return PLANE_DIRECTIONS
+      .Select(direction => Rotor.TopGrid.GetCubeBlock(plane_center + direction)).Where(block => block != null)
+      .Select(block => block.FatBlock as IMyUserControllableGun).Where(gun => gun != null)
       .ToList();
+  }
+
+  IEnumerable<Vector3I> GoUp() {
+    var position = Vector3I.Zero;
+    while (true) yield return position += Vector3I.Up;
+  }
+
+  List<IMyBlockGroup> BlockGroups(Func<IMyBlockGroup, bool> filter = null) {
+    var groups = new List<IMyBlockGroup>();
+    GridTerminalSystem.GetBlockGroups(groups, filter);
+    return groups;
   }
 
   List<T> Select<T>(IMyBlockGroup group, Func<T, bool> filter = null) where T : class {
@@ -282,7 +281,9 @@ public sealed class Program : MyGridProgram {
    * NOTE: similar function from `MathHelper` do not work!
    */
   float Limit2Pi(float radians) {
-    return radians < 0 ? (radians % MathHelper.TwoPi + MathHelper.TwoPi) : (radians % MathHelper.TwoPi);
+    var arc = radians % MathHelper.TwoPi;
+    if (arc < 0) arc += MathHelper.TwoPi;
+    return arc;
   }
 
   #endregion // RapidGun
