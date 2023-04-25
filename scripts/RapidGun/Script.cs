@@ -30,6 +30,7 @@ public sealed class Program : MyGridProgram {
   IMyUserControllableGun CurrentGun;
   List<List<IMyUserControllableGun>> GunPlanes;
   int CurrentPlaneIdx;
+  List<IMyMotorSuspension> Wheels; // Expects 1x1 wheels in diagonal barrel positions (adjacent to guns).
   // Gun System }}}
 
   float BlockSize; // m
@@ -39,19 +40,34 @@ public sealed class Program : MyGridProgram {
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
 
-  // Directions on a 2D plane.
-  ImmutableList<Vector3I> PLANE_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
-    Vector3I.Forward, Vector3I.Right, Vector3I.Backward, Vector3I.Left
+  // Directions on a 2D square grid.
+  ImmutableList<Vector3I> SURROUNDING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
+    Vector3I.Forward,
+    Vector3I.Right,
+    Vector3I.Backward,
+    Vector3I.Left
+  });
+  ImmutableList<Vector3I> DIAGONAL_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
+    Vector3I.Forward + Vector3I.Left,
+    Vector3I.Forward + Vector3I.Right,
+    Vector3I.Backward + Vector3I.Left,
+    Vector3I.Backward + Vector3I.Right
   });
 
   // Represents the working positions of the gun barrel: 0°, 90°, 180°, 270°, 360°.
   ImmutableList<float> ANGLE_CALIBRE = ImmutableList.Create(new float[] {
-    0, MathHelper.PiOver2, MathHelper.Pi, 3 * MathHelper.PiOver2, MathHelper.TwoPi
+    0,
+    MathHelper.PiOver2,
+    MathHelper.Pi,
+    3 * MathHelper.PiOver2,
+    MathHelper.TwoPi
   });
 
+  // TODO: rework status
   StringBuilder Status = new StringBuilder();
-  IMyTextSurface LCD;
   string SavedStatus = "";
+  IMyTextSurface LCD;
+  // TODO: indicate the state on the keyboard LCD
 
   Program() {
 
@@ -59,7 +75,7 @@ public sealed class Program : MyGridProgram {
 		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
     LCD.BackgroundColor = Color.Black;
 
-    if (BlockGroups().FirstOrDefault(SetGunSystem) != null) Init();
+    if (BlockGroups().FirstOrDefault(SetGunSystem) != null) InitGunSystem();
   }
 
   void Main(string argument, UpdateType updateSource) {
@@ -118,12 +134,15 @@ public sealed class Program : MyGridProgram {
     Status.Append(Math.Round(Rotor.UpperLimitRad, 2)+" - "+Math.Round(current_angle, 2)+" = ");
     Status.Append(Math.Round(delta, 2)+" rad\n");
 
+    // TODO: adapt to wheels
     var k = (float)Math.Sin(delta * delta / MathHelper.TwoPi);
 
     // TODO: move
+    // TODO: adapt to wheels
     Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(k);
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque - 40000;
 
+    // TODO: adapt to wheels
     // NOTE: max rotor velocity is ±π rad/s
     return MathHelper.Pi * MathHelper.Pi * k;
   }
@@ -212,7 +231,7 @@ public sealed class Program : MyGridProgram {
     // TODO:
   }
 
-  void Init() {
+  void InitGunSystem() {
 
     BlockSize = Me.CubeGrid.GridSize;
 
@@ -227,41 +246,68 @@ public sealed class Program : MyGridProgram {
     Rotor.RotorLock = true;
     BarrelAngle = 0;
 
-    GunPlanes.ForEach(ring => ring.ForEach(gun => gun.Enabled = false));
+    GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
     CurrentPlaneIdx = 0;
     CurrentGun = null;
+
+    // TODO: tweak
+    Wheels.ForEach(wheel => {
+      wheel.Height = 0.3f; // m
+    });
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
 
   bool SetGunSystem(IMyBlockGroup group) {
 
-    var me = Select<IMyProgrammableBlock>(group, block => block == Me);
-    if (me.Count != 1) return false;
+    var me = Select<IMyProgrammableBlock>(group, block => block == Me).SingleOrDefault();
+    if (me == null) return false;
 
-    var pistons = Select<IMyPistonBase>(group);
-    if (pistons.Count != 1) return false;
+    Piston = Select<IMyPistonBase>(group).SingleOrDefault();
+    if (Piston == null) return false;
 
-    var rotors = Select<IMyMotorAdvancedStator>(group);
-    if (rotors.Count != 1) return false;
+    Rotor = Select<IMyMotorAdvancedStator>(group).SingleOrDefault();
+    if (Rotor == null) return false;
 
-    Piston = pistons.First();
-    Rotor = rotors.First();
-    GunPlanes = GoUp().Select(Guns).TakeWhile(guns => guns.Count > 0).Reverse().ToList();
-
-    return GunPlanes.Count > 0;
+    return SetBarrel(Rotor.TopGrid);
   }
 
-  List<IMyUserControllableGun> Guns(Vector3I plane_center) {
-    return PLANE_DIRECTIONS
-      .Select(direction => Rotor.TopGrid.GetCubeBlock(plane_center + direction)).Where(block => block != null)
-      .Select(block => block.FatBlock as IMyUserControllableGun).Where(gun => gun != null)
+  bool SetBarrel(IMyCubeGrid barrel) {
+
+    GunPlanes = GoUp()
+      .Select(SurroundingPositions)
+      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).ToList())
+      .TakeWhile(guns => guns.Count > 0)
+      .Reverse()
       .ToList();
+
+    if (GunPlanes.Count <= 0) return false;
+
+    Wheels = GoUp()
+      .Select(DiagonalPositions)
+      .Select(positions => Select<IMyMotorSuspension>(barrel, positions).ToList())
+      .TakeWhile(wheels => wheels.Count > 0)
+      .SelectMany(wheels => wheels)
+      .ToList();
+
+    return true;
   }
 
   IEnumerable<Vector3I> GoUp() {
+    // Start at the position of the attachable block, e.g. rotor top.
     var position = Vector3I.Zero;
+    // Then go up the axis.
     while (true) yield return position += Vector3I.Up;
+  }
+
+  // Positions surrounding the `center` in 4 `SURROUNDING_DIRECTIONS`.
+  IEnumerable<Vector3I> SurroundingPositions(Vector3I center) {
+    return SURROUNDING_DIRECTIONS.Select(direction => direction + center);
+  }
+
+  // Positions near the `center` in 4 `DIAGONAL_DIRECTIONS`.
+  IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
+    return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
   }
 
   List<IMyBlockGroup> BlockGroups(Func<IMyBlockGroup, bool> filter = null) {
@@ -275,6 +321,12 @@ public sealed class Program : MyGridProgram {
 		group.GetBlocksOfType<T>(blocks, filter);
 		return blocks;
 	}
+
+  IEnumerable<T> Select<T>(IMyCubeGrid grid, IEnumerable<Vector3I> positions) where T : class {
+    return positions
+      .Select(position => grid.GetCubeBlock(position)).OfType<IMySlimBlock>()
+      .Select(block => block.FatBlock as T).OfType<T>();
+  }
 
   /*
    * Returns radians in the range [0 .. 2Pi].
