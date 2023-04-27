@@ -34,6 +34,7 @@ public sealed class Program : MyGridProgram {
   // Gun System }}}
 
   float BlockSize; // m
+  ITerminalProperty<float> Velocity;
 
   // Precision to compare the direction of 3D vectors.
   const double EPSILON = 0.006;
@@ -63,11 +64,8 @@ public sealed class Program : MyGridProgram {
     MathHelper.TwoPi
   });
 
-  // TODO: rework status
   StringBuilder Status = new StringBuilder();
-  string SavedStatus = "";
-  IMyTextSurface LCD;
-  // TODO: indicate the state on the keyboard LCD
+  IMyTextSurface LCD, KeyLCD;
 
   Program() {
 
@@ -75,19 +73,22 @@ public sealed class Program : MyGridProgram {
 		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
     LCD.BackgroundColor = Color.Black;
 
+		KeyLCD = Me.GetSurface(1);
+		KeyLCD.ContentType = ContentType.TEXT_AND_IMAGE;
+    KeyLCD.BackgroundColor = Color.Black;
+
     if (BlockGroups().FirstOrDefault(SetGunSystem) != null) InitGunSystem();
   }
 
   void Main(string argument, UpdateType updateSource) {
 
-    Status.Clear();
-
     if (!PistonInPosition) Slide();
     else if (!RotorInPosition) Rotate();
+    else if (!RotorStopped) Brake();
     else PrepareGun();
 
-    Status.Append(SavedStatus);
-    LCD.WriteText(Status);
+    IndicateStatus();
+    DisplayStatus();
   }
 
   Vector3D FireDirection { get {
@@ -102,6 +103,10 @@ public sealed class Program : MyGridProgram {
     return Rotor.Angle == Rotor.UpperLimitRad;
   }}
 
+  bool RotorStopped { get {
+    return Rotor.RotorLock && Velocity.GetValue(Rotor) == 0;
+  }}
+
   List<IMyUserControllableGun> CurrentGunPlane { get {
     return GunPlanes[CurrentPlaneIdx];
   }}
@@ -111,16 +116,25 @@ public sealed class Program : MyGridProgram {
   }
 
   void Slide() {
-    Status.Append("Sliding ...\n");
-    if (CurrentGun != null) CurrentGun.Enabled = false;
+    DisableCurrentGun();
     // TODO:
   }
 
   void Rotate() {
-    Status.Append("Rotating: ");
-    if (CurrentGun != null) CurrentGun.Enabled = false;
+    DisableCurrentGun();
     Rotor.TargetVelocityRad = TargetVelocity();
     Rotor.RotorLock = false;
+  }
+
+  void Brake() {
+    Rotor.RotorLock = true;
+    Rotor.TargetVelocityRad = 0;
+    Rotor.Torque = 0;
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
+  }
+
+  void DisableCurrentGun() {
+    if (CurrentGun != null) CurrentGun.Enabled = false;
   }
 
   float TargetVelocity() {
@@ -130,9 +144,6 @@ public sealed class Program : MyGridProgram {
 
     var delta = Rotor.UpperLimitRad - current_angle;
     if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
-
-    Status.Append(Math.Round(Rotor.UpperLimitRad, 2)+" - "+Math.Round(current_angle, 2)+" = ");
-    Status.Append(Math.Round(delta, 2)+" rad\n");
 
     // TODO: adapt to wheels
     var k = (float)Math.Sin(delta * delta / MathHelper.TwoPi);
@@ -148,8 +159,6 @@ public sealed class Program : MyGridProgram {
   }
 
   void PrepareGun() {
-    Rotor.RotorLock = true;
-    Rotor.TargetVelocityRad = 0;
     if (CurrentGun == null) CurrentGun = FindGunInCurrentFireDirection();
     if (CurrentGun == null) return; // Probably the swing amplitude is too big.
     if (CurrentGun.IsShooting) {
@@ -157,7 +166,6 @@ public sealed class Program : MyGridProgram {
       CurrentGun = null;
       SetNextGun();
     } else {
-      Status.Append("Ready: "+Math.Round(Rotor.Angle, 2)+" rad\n");
       CurrentGun.Enabled = true;
     }
   }
@@ -197,17 +205,7 @@ public sealed class Program : MyGridProgram {
 
     var next_angle_raw = Rotor.Angle + Math.Abs(Rotor.Angle - closest_gun_angle);
     var next_angle_limited = Limit2Pi(next_angle_raw);
-
     var next_angle = AngleCalibre(next_angle_limited);
-
-    Status.Append("\nSelected Gun: "+Math.Round(closest_gun_angle, 2)+" << ");
-    foreach (var angle in gun_angles) Status.Append(Math.Round(angle, 2)+" ");
-    Status.Append("\nSelected Angle: "+Math.Round(next_angle, 2)+"\n");
-
-    Status.Append("Raw: "+next_angle_raw+"\n");
-    Status.Append("Limited: "+next_angle_limited+"\n");
-
-    SavedStatus = Status.ToString();
 
     BarrelAngle = next_angle;
   }
@@ -234,6 +232,7 @@ public sealed class Program : MyGridProgram {
   void InitGunSystem() {
 
     BlockSize = Me.CubeGrid.GridSize;
+    Velocity = Rotor.GetProperty("Velocity").AsFloat();
 
     Piston.MinLimit = 0;
     Piston.MaxLimit = 0;
@@ -308,6 +307,21 @@ public sealed class Program : MyGridProgram {
   // Positions near the `center` in 4 `DIAGONAL_DIRECTIONS`.
   IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
     return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
+  }
+
+  void IndicateStatus() {
+    var image = (CurrentGun != null && CurrentGun.Enabled) ? "Arrow" : "Danger";
+		KeyLCD.ClearImagesFromSelection();
+    KeyLCD.AddImageToSelection(image);
+  }
+
+  void DisplayStatus() {
+    var current_angle = Math.Round(MathHelper.ToDegrees(Rotor.Angle));
+    var target_angle = Math.Round(Rotor.UpperLimitDeg);
+    var locked = Rotor.RotorLock ? "Locked" : "";
+    Status.Clear();
+    Status.Append("Plane: "+CurrentPlaneIdx+"; Angle: "+current_angle+" / "+target_angle+"° "+locked+"\n");
+    LCD.WriteText(Status);
   }
 
   List<IMyBlockGroup> BlockGroups(Func<IMyBlockGroup, bool> filter = null) {
