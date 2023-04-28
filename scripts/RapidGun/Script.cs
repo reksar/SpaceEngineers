@@ -127,10 +127,16 @@ public sealed class Program : MyGridProgram {
   }
 
   void Brake() {
+
     Rotor.RotorLock = true;
     Rotor.TargetVelocityRad = 0;
     Rotor.Torque = 0;
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
+
+    Wheels.ForEach(wheel => {
+      wheel.Height = 1;
+      wheel.Brake = true;
+    });
   }
 
   void DisableCurrentGun() {
@@ -140,22 +146,21 @@ public sealed class Program : MyGridProgram {
   float TargetVelocity() {
 
     // NOTE: `Rotor.Angle` can exceed 2π more than 2 times, but it can't be seen in the in-game rotor properties!
-    var current_angle = Limit2Pi(Rotor.Angle);
-
-    var delta = Rotor.UpperLimitRad - current_angle;
+    var delta = Rotor.UpperLimitRad - Limit2Pi(Rotor.Angle);
     if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
 
-    // TODO: adapt to wheels
-    var k = (float)Math.Sin(delta * delta / MathHelper.TwoPi);
+    var sin = (float)Math.Sin(delta);
 
     // TODO: move
-    // TODO: adapt to wheels
-    Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(k);
-    Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque - 40000;
+    Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(sin);
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque;
+    Wheels.ForEach(wheel => {
+      wheel.Brake = false;
+      wheel.Height = 1 - MathHelper.Clamp(2 * delta * delta, 0, 0.5f);
+    });
 
-    // TODO: adapt to wheels
     // NOTE: max rotor velocity is ±π rad/s
-    return MathHelper.Pi * MathHelper.Pi * k;
+    return MathHelper.TwoPi * sin;
   }
 
   void PrepareGun() {
@@ -238,7 +243,7 @@ public sealed class Program : MyGridProgram {
     Piston.MaxLimit = 0;
     Piston.Velocity = -Piston.MaxVelocity;
 
-    Rotor.Displacement = -0.3f; // m
+    Rotor.Displacement = 0.2f; // m
     Rotor.TargetVelocityRad = 0;
     Rotor.Torque = 0;
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
@@ -249,9 +254,20 @@ public sealed class Program : MyGridProgram {
     CurrentPlaneIdx = 0;
     CurrentGun = null;
 
-    // TODO: tweak
     Wheels.ForEach(wheel => {
-      wheel.Height = 0.3f; // m
+      wheel.Steering = false;
+      wheel.SteeringOverride = 0;
+      wheel.MaxSteerAngle = 0;
+      wheel.Propulsion = false;
+      wheel.PropulsionOverride = 0;
+      wheel.Brake = true;
+      wheel.IsParkingEnabled = false;
+      wheel.AirShockEnabled = false;
+      wheel.InvertPropulsion = false;
+      wheel.InvertPropulsion = false;
+      wheel.Power = 100; // %
+      wheel.Friction = 100; // %
+      wheel.Height = 0.5f; // m
     });
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
