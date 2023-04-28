@@ -30,6 +30,8 @@ public sealed class Program : MyGridProgram {
   IMyUserControllableGun CurrentGun;
   List<List<IMyUserControllableGun>> GunPlanes;
   int CurrentPlaneIdx;
+
+  // TODO: try to brake with hinges instead
   List<IMyMotorSuspension> Wheels; // Expects 1x1 wheels in diagonal barrel positions (adjacent to guns).
   // Gun System }}}
 
@@ -81,12 +83,18 @@ public sealed class Program : MyGridProgram {
   }
 
   void Main(string argument, UpdateType updateSource) {
-
     if (!PistonInPosition) Slide();
     else if (!RotorInPosition) Rotate();
     else if (!RotorStopped) Brake();
-    else PrepareGun();
-
+    else {
+      if (CurrentGun == null) CurrentGun = FindGunInCurrentFireDirection();
+      if (CurrentGun == null) {
+        // Probably `Rotor.Angle` has some delta after braking or the grid swinging.
+        Rotate();
+      } else {
+        PrepareGun();
+      }
+    }
     IndicateStatus();
     DisplayStatus();
   }
@@ -111,6 +119,10 @@ public sealed class Program : MyGridProgram {
     return GunPlanes[CurrentPlaneIdx];
   }}
 
+  bool GunReady { get {
+    return CurrentGun != null && CurrentGun.Enabled && !CurrentGun.IsShooting;
+  }}
+
   IMyUserControllableGun FindGunInCurrentFireDirection() {
     return CurrentGunPlane.Find(gun => gun.WorldMatrix.Forward.Equals(FireDirection, EPSILON));
   }
@@ -127,16 +139,10 @@ public sealed class Program : MyGridProgram {
   }
 
   void Brake() {
-
     Rotor.RotorLock = true;
     Rotor.TargetVelocityRad = 0;
     Rotor.Torque = 0;
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
-
-    Wheels.ForEach(wheel => {
-      wheel.Height = 1;
-      wheel.Brake = true;
-    });
   }
 
   void DisableCurrentGun() {
@@ -149,23 +155,19 @@ public sealed class Program : MyGridProgram {
     var delta = Rotor.UpperLimitRad - Limit2Pi(Rotor.Angle);
     if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
 
-    var sin = (float)Math.Sin(delta);
+    // NOTE: the `delta` range is [-2π .. 2π]
+    // and the sinus here is stretched to `sin`(-2π) = -1, `sin`(π) = 1, `sin`(0) = 0 by dividing on 4.
+    var sin = (float)Math.Sin(delta / 4);
 
     // TODO: move
     Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(sin);
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque;
-    Wheels.ForEach(wheel => {
-      wheel.Brake = false;
-      wheel.Height = 1 - MathHelper.Clamp(2 * delta * delta, 0, 0.5f);
-    });
 
-    // NOTE: max rotor velocity is ±π rad/s
+    // NOTE: max rotor velocity is ±π rad/s and ±2π is used to increase the period of max `Rotor` velocity.
     return MathHelper.TwoPi * sin;
   }
 
   void PrepareGun() {
-    if (CurrentGun == null) CurrentGun = FindGunInCurrentFireDirection();
-    if (CurrentGun == null) return; // Probably the swing amplitude is too big.
     if (CurrentGun.IsShooting) {
       CurrentGun.Enabled = false;
       CurrentGun = null;
@@ -243,7 +245,7 @@ public sealed class Program : MyGridProgram {
     Piston.MaxLimit = 0;
     Piston.Velocity = -Piston.MaxVelocity;
 
-    Rotor.Displacement = 0.2f; // m
+    Rotor.Displacement = -0.3f; // m
     Rotor.TargetVelocityRad = 0;
     Rotor.Torque = 0;
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
@@ -253,22 +255,6 @@ public sealed class Program : MyGridProgram {
     GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
     CurrentPlaneIdx = 0;
     CurrentGun = null;
-
-    Wheels.ForEach(wheel => {
-      wheel.Steering = false;
-      wheel.SteeringOverride = 0;
-      wheel.MaxSteerAngle = 0;
-      wheel.Propulsion = false;
-      wheel.PropulsionOverride = 0;
-      wheel.Brake = true;
-      wheel.IsParkingEnabled = false;
-      wheel.AirShockEnabled = false;
-      wheel.InvertPropulsion = false;
-      wheel.InvertPropulsion = false;
-      wheel.Power = 100; // %
-      wheel.Friction = 100; // %
-      wheel.Height = 0.5f; // m
-    });
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
@@ -298,6 +284,7 @@ public sealed class Program : MyGridProgram {
 
     if (GunPlanes.Count <= 0) return false;
 
+    // TODO: try to brake with hinges instead
     Wheels = GoUp()
       .Select(DiagonalPositions)
       .Select(positions => Select<IMyMotorSuspension>(barrel, positions).ToList())
@@ -326,17 +313,19 @@ public sealed class Program : MyGridProgram {
   }
 
   void IndicateStatus() {
-    var image = (CurrentGun != null && CurrentGun.Enabled) ? "Arrow" : "Danger";
 		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection(image);
+    KeyLCD.AddImageToSelection(GunReady ? "Arrow" : "Danger");
   }
 
   void DisplayStatus() {
     var current_angle = Math.Round(MathHelper.ToDegrees(Rotor.Angle));
     var target_angle = Math.Round(Rotor.UpperLimitDeg);
     var locked = Rotor.RotorLock ? "Locked" : "";
+    var gun_ready = GunReady ? "Ready" : "-";
     Status.Clear();
-    Status.Append("Plane: "+CurrentPlaneIdx+"; Angle: "+current_angle+" / "+target_angle+"° "+locked+"\n");
+    Status.Append("Plane: "+CurrentPlaneIdx+"\n");
+    Status.Append("Angle: "+current_angle+" / "+target_angle+"° "+locked+"\n");
+    Status.Append("Gun: "+gun_ready+"\n");
     LCD.WriteText(Status);
   }
 
