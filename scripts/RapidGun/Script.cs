@@ -30,21 +30,22 @@ public sealed class Program : MyGridProgram {
   IMyUserControllableGun CurrentGun;
   List<List<IMyUserControllableGun>> GunPlanes;
   int CurrentPlaneIdx;
+  float BlockSize; // m
 
   // NOTE: hinges are used to brake the `Rotor`, but currently are buggy (see `InitGunSystem`).
   // NOTE: there is no interface for the hinge terminal block, but `IMyMotorStator` should do.
   List<IMyMotorStator> Hinges;
   // Gun System }}}
 
-  float BlockSize; // m
   ITerminalProperty<float> Velocity;
+  IMyTextSurface LCD, KeyLCD;
 
   // Precision to compare the direction of 3D vectors.
   const double EPSILON = 0.006;
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
 
-  // Directions on a 2D square grid.
+  // Directions on a 2D square grid representing a gun plane - the barrel cross section.
   ImmutableList<Vector3I> SURROUNDING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
     Vector3I.Forward,
     Vector3I.Right,
@@ -67,9 +68,6 @@ public sealed class Program : MyGridProgram {
     MathHelper.TwoPi
   });
 
-  StringBuilder Status = new StringBuilder();
-  IMyTextSurface LCD, KeyLCD;
-
   Program() {
 
 		LCD = Me.GetSurface(0);
@@ -81,6 +79,8 @@ public sealed class Program : MyGridProgram {
     KeyLCD.BackgroundColor = Color.Black;
 
     if (BlockGroups().FirstOrDefault(SetGunSystem) != null) InitGunSystem();
+
+    // TODO: display init error
   }
 
   void Main(string argument, UpdateType updateSource) {
@@ -96,10 +96,10 @@ public sealed class Program : MyGridProgram {
         PrepareGun();
       }
     }
-    IndicateStatus();
     DisplayStatus();
   }
 
+  // Where should the `CurrentGun` be fired.
   Vector3D FireDirection { get {
     return Me.CubeGrid.WorldMatrix.Forward;
   }}
@@ -113,6 +113,7 @@ public sealed class Program : MyGridProgram {
   }}
 
   bool RotorStopped { get {
+    // NOTE: there is no another way to get the current `Rotor` velocity.
     return Rotor.RotorLock && Velocity.GetValue(Rotor) == 0;
   }}
 
@@ -130,7 +131,7 @@ public sealed class Program : MyGridProgram {
 
   void Slide() {
     DisableCurrentGun();
-    // TODO:
+    UpdatePistonVelocity();
   }
 
   void Rotate() {
@@ -152,6 +153,7 @@ public sealed class Program : MyGridProgram {
 
   float TargetVelocity() {
     // TODO: decrease braking due to hinges?
+    // TODO: refactoring
 
     // NOTE: `Rotor.Angle` can exceed 2π more than 2 times, but it can't be seen in the in-game rotor properties!
     var delta = Rotor.UpperLimitRad - Limit2Pi(Rotor.Angle);
@@ -161,7 +163,6 @@ public sealed class Program : MyGridProgram {
     // `sin`(-2π) = -1, `sin`(π) = 1, `sin`(0) = 0; using a divisor 4.
     var sin = (float)Math.Sin(delta / 4);
 
-    // TODO: move
     Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(sin);
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque;
 
@@ -180,12 +181,14 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetNextGun() {
+    // TODO: change plane if ready guns on current plane is not available in [-π/2 .. π/2] rad.
     var ready_guns = CurrentGunPlane.FindAll(gun => !gun.IsShooting);
     if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
     else SetNextGunPlane();
   }
 
   void SetNextRotorAngle(List<IMyUserControllableGun> guns) {
+    // TODO: refactoring
 
     // Precalculate this first, because it can change quickly as the grid quickly rotates.
     var fire_direction = FireDirection;
@@ -229,25 +232,34 @@ public sealed class Program : MyGridProgram {
     }
   }}
 
+  void UpdatePistonVelocity() {
+    if (Piston.MinLimit < Piston.MaxLimit) Piston.Velocity = Piston.MaxVelocity;
+    else Piston.Velocity = -Piston.MaxVelocity;
+  }
+
   float AngleCalibre(float radians) {
     var angle = ANGLE_CALIBRE.MinBy(calibre => Math.Abs(calibre - radians));
     return angle < MathHelper.TwoPi ? angle : 0;
   }
 
   void SetNextGunPlane() {
-    // TODO:
+    CurrentPlaneIdx++;
+    if (GunPlanes.Count <= CurrentPlaneIdx) CurrentPlaneIdx = 0;
+    // NOTE: expects `GunPlanes` are close together! Thus we iterate through the planes with `BlockSize`.
+    Piston.MaxLimit = CurrentPlaneIdx * BlockSize; // m
+    UpdatePistonVelocity();
   }
 
   void InitGunSystem() {
 
-    BlockSize = Me.CubeGrid.GridSize;
+    GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
+    CurrentPlaneIdx = 0;
+    CurrentGun = null;
 
-    // NOTE: there is no another way to get the current `Rotor` velocity.
-    Velocity = Rotor.GetProperty("Velocity").AsFloat();
-
-    Piston.MinLimit = 0;
-    Piston.MaxLimit = 0;
-    Piston.Velocity = -Piston.MaxVelocity;
+    Piston.MinLimit = 0; // m
+    Piston.MaxLimit = 0; // m
+    BlockSize = Me.CubeGrid.GridSize; // m
+    UpdatePistonVelocity();
 
     Rotor.Displacement = -0.3f; // m
     Rotor.TargetVelocityRad = 0;
@@ -255,23 +267,20 @@ public sealed class Program : MyGridProgram {
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
     Rotor.RotorLock = true;
     BarrelAngle = 0;
-
-    GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
-    CurrentPlaneIdx = 0;
-    CurrentGun = null;
+    Velocity = Rotor.GetProperty("Velocity").AsFloat();
 
     Hinges.ForEach(hinge => {
 
       // NOTE: mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
       // into the holes in the hull blocks when braking the `Rotor`.
       // NOTE: this mechanic is currently buggy, but it is enough have at leat one hinge in neutral position
-      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base in the form of
-      // a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed further, just init them here.
+      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base (stator) in
+      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than init here.
       hinge.LowerLimitRad = 0;
       hinge.UpperLimitRad = MathHelper.PiOver2;
-      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max velocity
+      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max
 
-      hinge.Torque = 33000000; // N*m, default
+      hinge.Torque = 33000000; // N*m
       hinge.BrakingTorque = 0;
     });
 
@@ -330,23 +339,25 @@ public sealed class Program : MyGridProgram {
     return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
   }
 
-  void IndicateStatus() {
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection(GunReady ? "Arrow" : "Danger");
-  }
-
   void DisplayStatus() {
+
     var current_angle = Math.Round(MathHelper.ToDegrees(Rotor.Angle));
     var target_angle = Math.Round(Rotor.UpperLimitDeg);
     var locked = Rotor.RotorLock ? "Locked" : "";
-    var gun_ready = GunReady ? "Ready" : "-";
-    Status.Clear();
-    Status.Append("Plane: "+CurrentPlaneIdx+"\n");
-    Status.Append("Angle: "+current_angle+" / "+target_angle+"° "+locked+"\n");
-    Status.Append("Gun: "+gun_ready+"\n");
-    LCD.WriteText(Status);
+    var gun_ready = GunReady;
+    var gun_status = gun_ready ? "Ready" : "-";
+
+    LCD.WriteText(
+      "Plane: "+CurrentPlaneIdx+"\n" +
+      "Angle: "+current_angle+"° / "+target_angle+"° "+locked+"\n" +
+      "Gun: "+gun_status+"\n"
+    );
+
+		KeyLCD.ClearImagesFromSelection();
+    KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
   }
 
+  // TODO: group {{{
   List<IMyBlockGroup> BlockGroups(Func<IMyBlockGroup, bool> filter = null) {
     var groups = new List<IMyBlockGroup>();
     GridTerminalSystem.GetBlockGroups(groups, filter);
@@ -366,7 +377,7 @@ public sealed class Program : MyGridProgram {
   }
 
   /*
-   * Returns radians in the range [0 .. 2Pi].
+   * Returns radians in the range [0 .. 2π].
    * NOTE: similar function from `MathHelper` do not work!
    */
   float Limit2Pi(float radians) {
@@ -374,6 +385,7 @@ public sealed class Program : MyGridProgram {
     if (arc < 0) arc += MathHelper.TwoPi;
     return arc;
   }
+  // TODO: group }}}
 
   #endregion // RapidGun
 }}
