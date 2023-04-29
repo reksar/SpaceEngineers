@@ -31,8 +31,9 @@ public sealed class Program : MyGridProgram {
   List<List<IMyUserControllableGun>> GunPlanes;
   int CurrentPlaneIdx;
 
-  // TODO: try to brake with hinges instead
-  List<IMyMotorSuspension> Wheels; // Expects 1x1 wheels in diagonal barrel positions (adjacent to guns).
+  // NOTE: hinges are used to brake the `Rotor`, but currently are buggy (see `InitGunSystem`).
+  // NOTE: there is no interface for the hinge terminal block, but `IMyMotorStator` should do.
+  List<IMyMotorStator> Hinges;
   // Gun System }}}
 
   float BlockSize; // m
@@ -150,13 +151,14 @@ public sealed class Program : MyGridProgram {
   }
 
   float TargetVelocity() {
+    // TODO: decrease braking due to hinges?
 
     // NOTE: `Rotor.Angle` can exceed 2π more than 2 times, but it can't be seen in the in-game rotor properties!
     var delta = Rotor.UpperLimitRad - Limit2Pi(Rotor.Angle);
     if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
 
-    // NOTE: the `delta` range is [-2π .. 2π]
-    // and the sinus here is stretched to `sin`(-2π) = -1, `sin`(π) = 1, `sin`(0) = 0 by dividing on 4.
+    // NOTE: the `delta` range is [-2π .. 2π] and the sinus here is stretched so:
+    // `sin`(-2π) = -1, `sin`(π) = 1, `sin`(0) = 0; using a divisor 4.
     var sin = (float)Math.Sin(delta / 4);
 
     // TODO: move
@@ -239,6 +241,8 @@ public sealed class Program : MyGridProgram {
   void InitGunSystem() {
 
     BlockSize = Me.CubeGrid.GridSize;
+
+    // NOTE: there is no another way to get the current `Rotor` velocity.
     Velocity = Rotor.GetProperty("Velocity").AsFloat();
 
     Piston.MinLimit = 0;
@@ -255,6 +259,21 @@ public sealed class Program : MyGridProgram {
     GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
     CurrentPlaneIdx = 0;
     CurrentGun = null;
+
+    Hinges.ForEach(hinge => {
+
+      // NOTE: mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
+      // into the holes in the hull blocks when braking the `Rotor`.
+      // NOTE: this mechanic is currently buggy, but it is enough have at leat one hinge in neutral position
+      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base in the form of
+      // a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed further, just init them here.
+      hinge.LowerLimitRad = 0;
+      hinge.UpperLimitRad = MathHelper.PiOver2;
+      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max velocity
+
+      hinge.Torque = 33000000; // N*m, default
+      hinge.BrakingTorque = 0;
+    });
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
@@ -284,15 +303,14 @@ public sealed class Program : MyGridProgram {
 
     if (GunPlanes.Count <= 0) return false;
 
-    // TODO: try to brake with hinges instead
-    Wheels = GoUp()
+    Hinges = GoUp()
       .Select(DiagonalPositions)
-      .Select(positions => Select<IMyMotorSuspension>(barrel, positions).ToList())
-      .TakeWhile(wheels => wheels.Count > 0)
-      .SelectMany(wheels => wheels)
+      .Select(positions => Select<IMyMotorStator>(barrel, positions).ToList())
+      .TakeWhile(hinges => hinges.Count > 0)
+      .SelectMany(hinges => hinges)
       .ToList();
 
-    return true;
+    return Hinges.Count > 0;
   }
 
   IEnumerable<Vector3I> GoUp() {
@@ -307,7 +325,7 @@ public sealed class Program : MyGridProgram {
     return SURROUNDING_DIRECTIONS.Select(direction => direction + center);
   }
 
-  // Positions near the `center` in 4 `DIAGONAL_DIRECTIONS`.
+  // Positions from the `center` in 4 `DIAGONAL_DIRECTIONS`.
   IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
     return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
   }
