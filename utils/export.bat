@@ -14,7 +14,7 @@ rem  inside the VS Code task, when a Script.cs file is in the active editor.
 rem  --------------------------------------------------------------------------
 
 set utils=%~dp0
-call %utils%config.bat || exit
+call "%utils%config.bat" || exit
 
 set script_dir=%~1
 
