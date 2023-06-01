@@ -27,7 +27,7 @@ public sealed class Program : MyGridProgram {
   // Gun System {{{
   IMyPistonBase Piston;
   IMyMotorAdvancedStator Rotor;
-  IMyUserControllableGun CurrentGun;
+  IMyUserControllableGun Gun; // The current gun, ready to fire.
   List<List<IMyUserControllableGun>> GunPlanes;
   int CurrentPlaneIdx;
   float BlockSize; // m
@@ -70,39 +70,33 @@ public sealed class Program : MyGridProgram {
 
   Program() {
 
-		LCD = Me.GetSurface(0);
-		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
-    LCD.BackgroundColor = Color.Black;
-
-		KeyLCD = Me.GetSurface(1);
-		KeyLCD.ContentType = ContentType.TEXT_AND_IMAGE;
-    KeyLCD.BackgroundColor = Color.Black;
+    InitLCD();
 
     if (BlockGroups().FirstOrDefault(SetGunSystem) != null) InitGunSystem();
-
     // TODO: display init error
   }
 
   void Main(string argument, UpdateType updateSource) {
+
     if (!PistonInPosition) Slide();
     else if (!RotorInPosition) Rotate();
     else if (!RotorStopped) Brake();
-    else {
-      if (CurrentGun == null) CurrentGun = FindGunInCurrentFireDirection();
-      if (CurrentGun == null) {
-        // Probably `Rotor.Angle` has some delta after braking or the grid swinging.
-        Rotate();
-      } else {
-        PrepareGun();
-      }
-    }
+    else PrepareGun();
+
     DisplayStatus();
   }
 
-  // Where should the `CurrentGun` be fired.
-  Vector3D FireDirection { get {
-    return Me.CubeGrid.WorldMatrix.Forward;
-  }}
+  void InitLCD() {
+
+		LCD = Me.GetSurface(0);
+		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
+    LCD.BackgroundColor = Color.Black;
+    LCD.WriteText("");
+
+		KeyLCD = Me.GetSurface(1);
+		KeyLCD.ContentType = ContentType.TEXT_AND_IMAGE;
+    KeyLCD.BackgroundColor = Color.Black;
+  }
 
   bool PistonInPosition { get {
     return Piston.CurrentPosition == (Piston.Velocity < 0 ? Piston.MinLimit : Piston.MaxLimit);
@@ -122,20 +116,34 @@ public sealed class Program : MyGridProgram {
   }}
 
   bool GunReady { get {
-    return CurrentGun != null && CurrentGun.Enabled && !CurrentGun.IsShooting;
+    return Gun != null && Gun.Enabled && !Gun.IsShooting;
   }}
 
-  IMyUserControllableGun FindGunInCurrentFireDirection() {
-    return CurrentGunPlane.Find(gun => gun.WorldMatrix.Forward.Equals(FireDirection, EPSILON));
+  // Where should the `CurrentGun` be fired.
+  Vector3D FireDirection { get {
+    return Me.CubeGrid.WorldMatrix.Forward;
+  }}
+
+  Vector3D RotorDirection { get {
+    // You can choose any direction in the rotation plane: Forward, Backward, Left, Right.
+    // Will be used to get some angles relative to this direction.
+    return Rotor.Top.WorldMatrix.Forward;
+  }}
+
+  // Angle between `FireDirection` and `RotorDirection` when `Rotor.Angle` is 0.
+  float RotorToFireAngle() {
+    // `Limit2Pi` fits the `Rotor.Angle`, because it can be out of range [0 .. 2π];
+    // `LimitPi` reflects the angle if needed.
+    return Math.Abs(DirectionAngle(FireDirection, RotorDirection)) - Math.Abs(LimitPi(Limit2Pi(Rotor.Angle)));
   }
 
   void Slide() {
-    DisableCurrentGun();
+    DisableGun();
     UpdatePistonVelocity();
   }
 
   void Rotate() {
-    DisableCurrentGun();
+    DisableGun();
     Rotor.TargetVelocityRad = TargetVelocity();
     Rotor.RotorLock = false;
   }
@@ -147,8 +155,8 @@ public sealed class Program : MyGridProgram {
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
   }
 
-  void DisableCurrentGun() {
-    if (CurrentGun != null) CurrentGun.Enabled = false;
+  void DisableGun() {
+    if (Gun != null) Gun.Enabled = false;
   }
 
   float TargetVelocity() {
@@ -171,17 +179,22 @@ public sealed class Program : MyGridProgram {
   }
 
   void PrepareGun() {
-    if (CurrentGun.IsShooting) {
-      CurrentGun.Enabled = false;
-      CurrentGun = null;
-      SetNextGun();
-    } else {
-      CurrentGun.Enabled = true;
-    }
+
+    //if (Gun == null) SetGun();
+
+    if (Gun == null || Gun.IsShooting) SwitchGun();
+    else Gun.Enabled = true;
   }
 
-  void SetNextGun() {
-    // TODO: change plane if ready guns on current plane is not available in [-π/2 .. π/2] rad.
+  void SetGun() {
+    Gun = GunPlanes[CurrentPlaneIdx][MathHelper.RoundToInt(Rotor.Angle / MathHelper.PiOver2)];
+  }
+
+  void SwitchGun() {
+    DisableGun();
+    Gun = null;
+    // TODO: change plane if ready guns on current plane are not available in [-π/2 .. π/2] rad, but are available on
+    // the next plane.
     var ready_guns = CurrentGunPlane.FindAll(gun => !gun.IsShooting);
     if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
     else SetNextGunPlane();
@@ -254,7 +267,7 @@ public sealed class Program : MyGridProgram {
 
     GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
     CurrentPlaneIdx = 0;
-    CurrentGun = null;
+    Gun = null;
 
     Piston.MinLimit = 0; // m
     Piston.MaxLimit = 0; // m
@@ -289,13 +302,13 @@ public sealed class Program : MyGridProgram {
 
   bool SetGunSystem(IMyBlockGroup group) {
 
-    var me = Select<IMyProgrammableBlock>(group, block => block == Me).SingleOrDefault();
+    var me = Select<IMyProgrammableBlock>(group, block => block == Me).FirstOrDefault();
     if (me == null) return false;
 
-    Piston = Select<IMyPistonBase>(group).SingleOrDefault();
+    Piston = Select<IMyPistonBase>(group).FirstOrDefault();
     if (Piston == null) return false;
 
-    Rotor = Select<IMyMotorAdvancedStator>(group).SingleOrDefault();
+    Rotor = Select<IMyMotorAdvancedStator>(group).FirstOrDefault();
     if (Rotor == null) return false;
 
     return SetBarrel(Rotor.TopGrid);
@@ -305,7 +318,7 @@ public sealed class Program : MyGridProgram {
 
     GunPlanes = GoUp()
       .Select(SurroundingPositions)
-      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).ToList())
+      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).OrderBy(GunBaseAngle).ToList())
       .TakeWhile(guns => guns.Count > 0)
       .Reverse()
       .ToList();
@@ -320,6 +333,11 @@ public sealed class Program : MyGridProgram {
       .ToList();
 
     return Hinges.Count > 0;
+  }
+
+  int GunBaseAngle(IMyUserControllableGun gun) {
+    // TODO:
+    return MathHelper.RoundToInt(DirectionAngle(gun.WorldMatrix.Forward, RotorDirection));
   }
 
   IEnumerable<Vector3I> GoUp() {
@@ -341,16 +359,35 @@ public sealed class Program : MyGridProgram {
 
   void DisplayStatus() {
 
+    var gun_ready = GunReady;
+
+    string state;
+    if (gun_ready) state = "Ready";
+    else if (!PistonInPosition) state = "Sliding ...";
+    else if (!RotorInPosition) state = "Rotating ...";
+    else if (!RotorStopped) state = "Braking ...";
+    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
+    else state = "Unknown state";
+
     var current_angle = Math.Round(MathHelper.ToDegrees(Rotor.Angle));
     var target_angle = Math.Round(Rotor.UpperLimitDeg);
     var locked = Rotor.RotorLock ? "Locked" : "";
-    var gun_ready = GunReady;
     var gun_status = gun_ready ? "Ready" : "-";
 
     LCD.WriteText(
+      state+"\n"+
       "Plane: "+CurrentPlaneIdx+"\n" +
       "Angle: "+current_angle+"° / "+target_angle+"° "+locked+"\n" +
       "Gun: "+gun_status+"\n"
+
+    // TODO: remove after debug
+      +"\n"+
+      (Rotor == null ? "" : (
+          String.Join(", ", GunPlanes[CurrentPlaneIdx].Select(GunBaseAngle))
+          +"\n"+
+          RotorToFireAngle().ToString()
+        )
+      )
     );
 
 		KeyLCD.ClearImagesFromSelection();
@@ -376,14 +413,39 @@ public sealed class Program : MyGridProgram {
       .Select(block => block.FatBlock as T).OfType<T>();
   }
 
-  /*
-   * Returns radians in the range [0 .. 2π].
-   * NOTE: similar function from `MathHelper` do not work!
-   */
+  // Angle between normalized direction vectors `a` and `b` in range [-π .. π].
+  float DirectionAngle(Vector3D a, Vector3D b) {
+
+    // `Dot` product is enough for normalized vectors. Instead of `MyMath.CosineDistance`.
+    var dot = (float)a.Dot(b);
+
+    // `dot` may be slightly out of the `cos` range due to floating point numbers.
+    // `Clamp` prevents further receipt of NaN from `Acos`.
+    var cos = MyMath.Clamp(dot, -1, 1);
+
+    var angle = (float)Math.Acos(cos);
+
+    return CopySign(angle, cos);
+  }
+
+  float CopySign(float value, float sign) {
+    return (value < 0) == (sign < 0) ? value : -value;
+  }
+
+  // Returns radians in the range [0 .. 2π].
+  // NOTE: similar function from `MathHelper` do not work!
   float Limit2Pi(float radians) {
     var arc = radians % MathHelper.TwoPi;
     if (arc < 0) arc += MathHelper.TwoPi;
     return arc;
+  }
+
+  // Returns radians in the range [-π .. π].
+  // NOTE: similar function from `MathHelper` do not work!
+  float LimitPi(float radians) {
+    if (radians > MathHelper.Pi) return radians % MathHelper.Pi - MathHelper.Pi;
+    if (radians < -MathHelper.Pi) return radians % MathHelper.Pi + MathHelper.Pi;
+    return radians;
   }
   // TODO: group }}}
 
