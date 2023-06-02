@@ -130,7 +130,7 @@ public sealed class Program : MyGridProgram {
     return Rotor.Top.WorldMatrix.Forward;
   }}
 
-  // Angle between `FireDirection` and `RotorDirection` when `Rotor.Angle` is 0.
+  // Angle (offset) between `FireDirection` and `RotorDirection` when `Rotor.Angle` is 0.
   float RotorToFireAngle() {
     // `Limit2Pi` fits the `Rotor.Angle`, because it can be out of range [0 .. 2π];
     // `LimitPi` reflects the angle if needed.
@@ -180,14 +180,19 @@ public sealed class Program : MyGridProgram {
 
   void PrepareGun() {
 
-    //if (Gun == null) SetGun();
+    if (Gun == null) SetGun();
 
-    if (Gun == null || Gun.IsShooting) SwitchGun();
+    if (Gun.IsShooting) SwitchGun();
     else Gun.Enabled = true;
   }
 
   void SetGun() {
-    Gun = GunPlanes[CurrentPlaneIdx][MathHelper.RoundToInt(Rotor.Angle / MathHelper.PiOver2)];
+
+    // According to the order of `GunBaseAngle`.
+    // TODO: limited `Rotor.Angle` getter.
+    var gun_idx = MathHelper.RoundToInt(Limit2Pi(Rotor.Angle) / MathHelper.PiOver2);
+
+    Gun = GunPlanes[CurrentPlaneIdx][gun_idx];
   }
 
   void SwitchGun() {
@@ -335,9 +340,9 @@ public sealed class Program : MyGridProgram {
     return Hinges.Count > 0;
   }
 
-  int GunBaseAngle(IMyUserControllableGun gun) {
-    // TODO:
-    return MathHelper.RoundToInt(DirectionAngle(gun.WorldMatrix.Forward, RotorDirection));
+  // Angle between `gun` *Forward* direction and `FireDirection` when `Rotor.Angle` is 0.
+  float GunBaseAngle(IMyUserControllableGun gun) {
+    return Limit2Pi(DirectionAngle(gun.WorldMatrix.Forward, RotorDirection) + RotorToFireAngle());
   }
 
   IEnumerable<Vector3I> GoUp() {
@@ -379,15 +384,6 @@ public sealed class Program : MyGridProgram {
       "Plane: "+CurrentPlaneIdx+"\n" +
       "Angle: "+current_angle+"° / "+target_angle+"° "+locked+"\n" +
       "Gun: "+gun_status+"\n"
-
-    // TODO: remove after debug
-      +"\n"+
-      (Rotor == null ? "" : (
-          String.Join(", ", GunPlanes[CurrentPlaneIdx].Select(GunBaseAngle))
-          +"\n"+
-          RotorToFireAngle().ToString()
-        )
-      )
     );
 
 		KeyLCD.ClearImagesFromSelection();
