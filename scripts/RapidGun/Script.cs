@@ -103,7 +103,7 @@ public sealed class Program : MyGridProgram {
   }}
 
   bool RotorInPosition { get {
-    return Rotor.Angle == Rotor.UpperLimitRad;
+    return RotorAngle == Rotor.UpperLimitRad;
   }}
 
   bool RotorStopped { get {
@@ -130,11 +130,15 @@ public sealed class Program : MyGridProgram {
     return Rotor.Top.WorldMatrix.Forward;
   }}
 
-  // Angle (offset) between `FireDirection` and `RotorDirection` when `Rotor.Angle` is 0.
+  // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
+  float RotorAngle { get {
+    return Limit2Pi(Rotor.Angle); // [0 .. 2π]
+  }}
+
+  // Angle (offset) between `FireDirection` and `RotorDirection` when `RotorAngle` is 0.
   float RotorToFireAngle() {
-    // `Limit2Pi` fits the `Rotor.Angle`, because it can be out of range [0 .. 2π];
-    // `LimitPi` reflects the angle if needed.
-    return Math.Abs(DirectionAngle(FireDirection, RotorDirection)) - Math.Abs(LimitPi(Limit2Pi(Rotor.Angle)));
+    // NOTE: `LimitPi` reflects the angle if needed.
+    return Math.Abs(DirectionAngle(FireDirection, RotorDirection)) - Math.Abs(LimitPi(RotorAngle));
   }
 
   void Slide() {
@@ -163,8 +167,7 @@ public sealed class Program : MyGridProgram {
     // TODO: decrease braking due to hinges?
     // TODO: refactoring
 
-    // NOTE: `Rotor.Angle` can exceed 2π more than 2 times, but it can't be seen in the in-game rotor properties!
-    var delta = Rotor.UpperLimitRad - Limit2Pi(Rotor.Angle);
+    var delta = Rotor.UpperLimitRad - RotorAngle;
     if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
 
     // NOTE: the `delta` range is [-2π .. 2π] and the sinus here is stretched so:
@@ -189,8 +192,7 @@ public sealed class Program : MyGridProgram {
   void SetGun() {
 
     // According to the order of `GunBaseAngle`.
-    // TODO: limited `Rotor.Angle` getter.
-    var gun_idx = MathHelper.RoundToInt(Limit2Pi(Rotor.Angle) / MathHelper.PiOver2);
+    var gun_idx = MathHelper.RoundToInt(RotorAngle / MathHelper.PiOver2);
 
     Gun = GunPlanes[CurrentPlaneIdx][gun_idx];
   }
@@ -340,7 +342,7 @@ public sealed class Program : MyGridProgram {
     return Hinges.Count > 0;
   }
 
-  // Angle between `gun` *Forward* direction and `FireDirection` when `Rotor.Angle` is 0.
+  // Angle between `gun` *Forward* direction and `FireDirection` when `RotorAngle` is 0.
   float GunBaseAngle(IMyUserControllableGun gun) {
     return Limit2Pi(DirectionAngle(gun.WorldMatrix.Forward, RotorDirection) + RotorToFireAngle());
   }
