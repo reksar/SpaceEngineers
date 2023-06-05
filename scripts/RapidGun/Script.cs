@@ -169,6 +169,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void Brake() {
+    DisableGun();
     Rotor.RotorLock = true;
     Rotor.TargetVelocityRad = 0;
     Rotor.Torque = 0;
