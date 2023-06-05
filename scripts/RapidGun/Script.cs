@@ -212,14 +212,13 @@ public sealed class Program : MyGridProgram {
     return MathHelper.TwoPi * sin;
   }
 
-  // NOTE: The `Rotor` is expected is locked in a calibrated position - `ANGLE_CALIBRE`!
+  // NOTE: The `Rotor` is expected to be locked in a calibrated position - `ANGLE_CALIBRE`!
   void PrepareGun() {
 
     if (Gun == null) SetGun();
 
-    // TODO: check if null or not working.
-    if (Gun.IsShooting) SwitchGun();
-    else Gun.Enabled = true;
+    if (IsGunReady(Gun)) Gun.Enabled = true;
+    else SwitchGun();
   }
 
   void SetGun() {
@@ -227,7 +226,7 @@ public sealed class Program : MyGridProgram {
     // According to the order of `GunBaseAngle`.
     var gun_idx = MathHelper.RoundToInt(RotorAngle / MathHelper.PiOver2);
 
-    Gun = Barrel[CurrentBarrelLevel][gun_idx];
+    Gun = GunPlane[gun_idx];
   }
 
   void SwitchGun() {
@@ -235,9 +234,13 @@ public sealed class Program : MyGridProgram {
     Gun = null;
     // TODO: change plane if ready guns on current plane are not available in [-π/2 .. π/2] rad, but are available on
     // the next plane.
-    var ready_guns = GunPlane.FindAll(gun => !gun.IsShooting);
+    var ready_guns = GunPlane.FindAll(IsGunReady);
     if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
     else SetNextGunPlane();
+  }
+
+  bool IsGunReady(IMyUserControllableGun gun) {
+    return gun != null && !gun.IsShooting && gun.IsFunctional;
   }
 
   void SetNextRotorAngle(List<IMyUserControllableGun> guns) {
@@ -259,7 +262,7 @@ public sealed class Program : MyGridProgram {
 
       var angle = (float)Math.Acos(cos);
 
-      return cos < 0 ? MathHelper.TwoPi - angle : angle; 
+      return cos < 0 ? MathHelper.TwoPi - angle : angle;
     }).ToArray();
 
     var closest_gun_angle = gun_angles.MinBy(angle => {
@@ -312,11 +315,12 @@ public sealed class Program : MyGridProgram {
 
     Hinges.ForEach(hinge => {
 
-      // NOTE: mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
+      // NOTE: Mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
       // into the holes in the hull blocks when braking the `Rotor`.
-      // NOTE: this mechanic is currently buggy, but it is enough have at leat one hinge in neutral position
+      //
+      // NOTE: This mechanic is currently buggy, but it is enough have at least one hinge in neutral position
       // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base (stator) in
-      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than init here.
+      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than this init.
       hinge.LowerLimitRad = 0;
       hinge.UpperLimitRad = MathHelper.PiOver2;
       hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max
