@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -22,26 +21,41 @@ namespace RapidGun {
 
 public sealed class Program : MyGridProgram {
 
+  /*
+   * If the `Program` constructor has successfully initialized the gun system, then the `Main` method will run
+   * automatically with the `UpdateFrequency`.
+   *
+   * I have not decided yet whether to convert this program to a state machine. This *may* make debugging easier.
+   * But now it's easier to unravel the thread of Ariadne, starting from the `Main`.
+   */
+
   #region RapidGun
 
-  // Gun System {{{
+  // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
   IMyPistonBase Piston;
+
+  // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
+  // `CurrentBarrelLevel`.
   IMyMotorAdvancedStator Rotor;
-  IMyUserControllableGun Gun; // The current gun, ready to fire.
-  List<List<IMyUserControllableGun>> GunPlanes;
-  int CurrentPlaneIdx;
+
+  // `Rotor` top grid. Consists of identical levels with radial symmetry: a gun in each of 4 base directions on the
+  // plane.
+  List<List<IMyUserControllableGun>> Barrel;
+  int CurrentBarrelLevel;
+
+  // Current active gun in `FireDirection`.
+  IMyUserControllableGun Gun; 
+
+  // Hinges and attached wheels are used to brake the `Rotor`.
+  // NOTE: this mechanic is currently buggy (see `InitGunSystem`).
+  // NOTE: There is no interface for the *hinge* terminal block, but `IMyMotorStator` should do.
+  List<IMyMotorStator> Hinges;
+
+  // Will be different for *large* and *small* grids.
   float BlockSize; // m
 
-  // NOTE: hinges are used to brake the `Rotor`, but currently are buggy (see `InitGunSystem`).
-  // NOTE: there is no interface for the hinge terminal block, but `IMyMotorStator` should do.
-  List<IMyMotorStator> Hinges;
-  // Gun System }}}
-
-  ITerminalProperty<float> Velocity;
+  ITerminalProperty<float> RotorVelocity;
   IMyTextSurface LCD, KeyLCD;
-
-  // Precision to compare the direction of 3D vectors.
-  const double EPSILON = 0.006;
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
 
@@ -65,7 +79,7 @@ public sealed class Program : MyGridProgram {
     MathHelper.PiOver2,
     MathHelper.Pi,
     3 * MathHelper.PiOver2,
-    MathHelper.TwoPi
+    MathHelper.TwoPi // TODO: try to do without this item
   });
 
   Program() {
@@ -76,8 +90,10 @@ public sealed class Program : MyGridProgram {
     // TODO: display init error
   }
 
+  // Will run with the `UpdateFrequency` set at the end of `InitGunSystem`. Or won't run on init fail.
   void Main(string argument, UpdateType updateSource) {
 
+    // Mind the order!
     if (!PistonInPosition) Slide();
     else if (!RotorInPosition) Rotate();
     else if (!RotorStopped) Brake();
@@ -108,11 +124,11 @@ public sealed class Program : MyGridProgram {
 
   bool RotorStopped { get {
     // NOTE: there is no another way to get the current `Rotor` velocity.
-    return Rotor.RotorLock && Velocity.GetValue(Rotor) == 0;
+    return Rotor.RotorLock && RotorVelocity.GetValue(Rotor) == 0;
   }}
 
-  List<IMyUserControllableGun> CurrentGunPlane { get {
-    return GunPlanes[CurrentPlaneIdx];
+  List<IMyUserControllableGun> GunPlane { get {
+    return Barrel[CurrentBarrelLevel];
   }}
 
   bool GunReady { get {
@@ -181,10 +197,12 @@ public sealed class Program : MyGridProgram {
     return MathHelper.TwoPi * sin;
   }
 
+  // NOTE: The `Rotor` is expected is locked in a calibrated position - `ANGLE_CALIBRE`!
   void PrepareGun() {
 
     if (Gun == null) SetGun();
 
+    // TODO: check if null or not working.
     if (Gun.IsShooting) SwitchGun();
     else Gun.Enabled = true;
   }
@@ -194,7 +212,7 @@ public sealed class Program : MyGridProgram {
     // According to the order of `GunBaseAngle`.
     var gun_idx = MathHelper.RoundToInt(RotorAngle / MathHelper.PiOver2);
 
-    Gun = GunPlanes[CurrentPlaneIdx][gun_idx];
+    Gun = Barrel[CurrentBarrelLevel][gun_idx];
   }
 
   void SwitchGun() {
@@ -202,7 +220,7 @@ public sealed class Program : MyGridProgram {
     Gun = null;
     // TODO: change plane if ready guns on current plane are not available in [-π/2 .. π/2] rad, but are available on
     // the next plane.
-    var ready_guns = CurrentGunPlane.FindAll(gun => !gun.IsShooting);
+    var ready_guns = GunPlane.FindAll(gun => !gun.IsShooting);
     if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
     else SetNextGunPlane();
   }
@@ -263,17 +281,17 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetNextGunPlane() {
-    CurrentPlaneIdx++;
-    if (GunPlanes.Count <= CurrentPlaneIdx) CurrentPlaneIdx = 0;
+    CurrentBarrelLevel++;
+    if (Barrel.Count <= CurrentBarrelLevel) CurrentBarrelLevel = 0;
     // NOTE: expects `GunPlanes` are close together! Thus we iterate through the planes with `BlockSize`.
-    Piston.MaxLimit = CurrentPlaneIdx * BlockSize; // m
+    Piston.MaxLimit = CurrentBarrelLevel * BlockSize; // m
     UpdatePistonVelocity();
   }
 
   void InitGunSystem() {
 
-    GunPlanes.ForEach(plane => plane.ForEach(gun => gun.Enabled = false));
-    CurrentPlaneIdx = 0;
+    Barrel.ForEach(level => level.ForEach(gun => gun.Enabled = false));
+    CurrentBarrelLevel = 0;
     Gun = null;
 
     Piston.MinLimit = 0; // m
@@ -287,7 +305,7 @@ public sealed class Program : MyGridProgram {
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
     Rotor.RotorLock = true;
     BarrelAngle = 0;
-    Velocity = Rotor.GetProperty("Velocity").AsFloat();
+    RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
 
     Hinges.ForEach(hinge => {
 
@@ -323,14 +341,14 @@ public sealed class Program : MyGridProgram {
 
   bool SetBarrel(IMyCubeGrid barrel) {
 
-    GunPlanes = GoUp()
+    Barrel = GoUp()
       .Select(SurroundingPositions)
       .Select(positions => Select<IMyUserControllableGun>(barrel, positions).OrderBy(GunBaseAngle).ToList())
       .TakeWhile(guns => guns.Count > 0)
       .Reverse()
       .ToList();
 
-    if (GunPlanes.Count <= 0) return false;
+    if (Barrel.Count <= 0) return false;
 
     Hinges = GoUp()
       .Select(DiagonalPositions)
@@ -369,23 +387,22 @@ public sealed class Program : MyGridProgram {
     var gun_ready = GunReady;
 
     string state;
-    if (gun_ready) state = "Ready";
+    if (gun_ready) state = "Gun Ready";
     else if (!PistonInPosition) state = "Sliding ...";
     else if (!RotorInPosition) state = "Rotating ...";
     else if (!RotorStopped) state = "Braking ...";
     else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
     else state = "Unknown state";
 
-    var current_angle = Math.Round(MathHelper.ToDegrees(Rotor.Angle));
+    var rotor_angle_abs = MathHelper.RoundToInt(MathHelper.ToDegrees(Rotor.Angle));
+    var rotor_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle));
     var target_angle = Math.Round(Rotor.UpperLimitDeg);
     var locked = Rotor.RotorLock ? "Locked" : "";
-    var gun_status = gun_ready ? "Ready" : "-";
 
     LCD.WriteText(
       state+"\n"+
-      "Plane: "+CurrentPlaneIdx+"\n" +
-      "Angle: "+current_angle+"° / "+target_angle+"° "+locked+"\n" +
-      "Gun: "+gun_status+"\n"
+      "Barrel Level: "+CurrentBarrelLevel+"\n"+
+      "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
     );
 
 		KeyLCD.ClearImagesFromSelection();
