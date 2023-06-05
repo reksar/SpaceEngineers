@@ -146,10 +146,24 @@ public sealed class Program : MyGridProgram {
     return Rotor.Top.WorldMatrix.Forward;
   }}
 
-  // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
-  float RotorAngle { get {
-    return Limit2Pi(Rotor.Angle); // [0 .. 2π]
-  }}
+  float RotorAngle {
+
+    get {
+      // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
+      return Limit2Pi(Rotor.Angle); // [0 .. 2π]
+    }
+
+    set {
+      // Try playing with the related property sliders in the game if you don't understand this order.
+      if (value < Rotor.LowerLimitRad) {
+        Rotor.LowerLimitRad = value;
+        Rotor.UpperLimitRad = value;
+      } else {
+        Rotor.UpperLimitRad = value;
+        Rotor.LowerLimitRad = value;
+      }
+    }
+  }
 
   // Angle (offset) between `FireDirection` and `RotorDirection` when `RotorAngle` is 0.
   float RotorToFireAngle() {
@@ -256,20 +270,8 @@ public sealed class Program : MyGridProgram {
 
     var next_angle_raw = Rotor.Angle + Math.Abs(Rotor.Angle - closest_gun_angle);
     var next_angle_limited = Limit2Pi(next_angle_raw);
-    var next_angle = AngleCalibre(next_angle_limited);
-
-    BarrelAngle = next_angle;
+    RotorAngle = AngleCalibre(next_angle_limited);
   }
-
-  float BarrelAngle { set {
-    if (value < Rotor.LowerLimitRad) {
-      Rotor.LowerLimitRad = value;
-      Rotor.UpperLimitRad = value;
-    } else {
-      Rotor.UpperLimitRad = value;
-      Rotor.LowerLimitRad = value;
-    }
-  }}
 
   void UpdatePistonVelocity() {
     if (Piston.MinLimit < Piston.MaxLimit) Piston.Velocity = Piston.MaxVelocity;
@@ -305,7 +307,7 @@ public sealed class Program : MyGridProgram {
     Rotor.Torque = 0;
     Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
     Rotor.RotorLock = true;
-    BarrelAngle = 0;
+    RotorAngle = 0;
     RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
 
     Hinges.ForEach(hinge => {
