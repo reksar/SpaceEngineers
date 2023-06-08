@@ -37,10 +37,12 @@ public sealed class Program : MyGridProgram {
   // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
   // `CurrentBarrelLevel`.
   IMyMotorAdvancedStator Rotor;
+  ITerminalProperty<float> RotorVelocity;
 
-  // `Rotor` top grid. Consists of identical levels with radial symmetry: a gun in each of 4 base directions on the
-  // plane.
-  List<List<IMyUserControllableGun>> Barrel;
+  // `Rotor`s top grid is the `Barrel`. Consists of identical *levels* grouped in a `List`. Each *level* is radially
+  // symmetrical and has a gun in each of the 4 base directions on the plane. An `int` key of the `Dictionary` is the
+  // `GunBaseAngle` of the related gun.
+  List<Dictionary<int, IMyUserControllableGun>> Barrel;
   int CurrentBarrelLevel;
 
   // Current active gun in `FireDirection`.
@@ -54,12 +56,12 @@ public sealed class Program : MyGridProgram {
   // Will be different for *large* and *small* grids.
   float BlockSize; // m
 
-  ITerminalProperty<float> RotorVelocity;
   IMyTextSurface LCD, KeyLCD;
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
 
   // Directions on a 2D square grid representing a gun plane - the barrel cross section.
+  // TODO: move it to a local scope.
   ImmutableList<Vector3I> SURROUNDING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
     Vector3I.Forward,
     Vector3I.Right,
@@ -71,15 +73,6 @@ public sealed class Program : MyGridProgram {
     Vector3I.Forward + Vector3I.Right,
     Vector3I.Backward + Vector3I.Left,
     Vector3I.Backward + Vector3I.Right
-  });
-
-  // Represents the working positions of the gun barrel: 0°, 90°, 180°, 270°, 360°.
-  ImmutableList<float> ANGLE_CALIBRE = ImmutableList.Create(new float[] {
-    0,
-    MathHelper.PiOver2,
-    MathHelper.Pi,
-    3 * MathHelper.PiOver2,
-    MathHelper.TwoPi // TODO: try to do without this item
   });
 
   Program() {
@@ -127,12 +120,8 @@ public sealed class Program : MyGridProgram {
     return Rotor.RotorLock && RotorVelocity.GetValue(Rotor) == 0;
   }}
 
-  List<IMyUserControllableGun> GunPlane { get {
+  Dictionary<int, IMyUserControllableGun> GunPlane { get {
     return Barrel[CurrentBarrelLevel];
-  }}
-
-  bool GunReady { get {
-    return Gun != null && Gun.Enabled && !Gun.IsShooting;
   }}
 
   // Where should the `CurrentGun` be fired.
@@ -150,7 +139,7 @@ public sealed class Program : MyGridProgram {
 
     get {
       // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
-      return Limit2Pi(Rotor.Angle); // [0 .. 2π]
+      return Limit2Pi(Rotor.Angle);
     }
 
     set {
@@ -215,75 +204,42 @@ public sealed class Program : MyGridProgram {
   // NOTE: The `Rotor` is expected to be locked in a calibrated position - `ANGLE_CALIBRE`!
   void PrepareGun() {
 
-    if (Gun == null) SetGun();
+    if (Gun == null) Gun = GunPlane[CalibratedAngle(Rotor.Angle)];
 
-    if (IsGunReady(Gun)) Gun.Enabled = true;
+    if (GunReady(Gun)) Gun.Enabled = true;
     else SwitchGun();
   }
 
-  void SetGun() {
-
-    // According to the order of `GunBaseAngle`.
-    var gun_idx = MathHelper.RoundToInt(RotorAngle / MathHelper.PiOver2);
-
-    Gun = GunPlane[gun_idx];
+  // We have 4 gun positions on a circle (2π), so 2π / 4 = π/2 - is the angle calibre.
+  int CalibratedAngle(float angle) {
+    const int PER_CIRCLE = 4; // Like 2π limit, but for `int` calibre.
+    return MathHelper.RoundToInt(Math.Abs(angle) / MathHelper.PiOver2) % PER_CIRCLE;
   }
 
   void SwitchGun() {
+
     DisableGun();
     Gun = null;
-    // TODO: change plane if ready guns on current plane are not available in [-π/2 .. π/2] rad, but are available on
-    // the next plane.
-    var ready_guns = GunPlane.FindAll(IsGunReady);
-    if (ready_guns.Count > 0) SetNextRotorAngle(ready_guns);
+
+    // TODO: search for a closest gun in the entire system
+    var available_angles = GunPlane.Where(i => GunReady(i.Value)).Select(i => i.Key).ToList();
+    if (available_angles.Count > 0) SetRotorAngle(available_angles);
     else SetNextGunPlane();
   }
 
-  bool IsGunReady(IMyUserControllableGun gun) {
+  bool GunReady(IMyUserControllableGun gun) {
     return gun != null && !gun.IsShooting && gun.IsFunctional;
   }
 
-  void SetNextRotorAngle(List<IMyUserControllableGun> guns) {
-    // TODO: refactoring
-
-    // Precalculate this first, because it can change quickly as the grid quickly rotates.
-    var fire_direction = FireDirection;
-    var gun_directions = guns.Select(gun => gun.WorldMatrix.Forward).ToImmutableList();
-
-    // Then this will be calculated with the min deviation.
-    var gun_angles = gun_directions.Select(gun_direction => {
-
-      // The direction vectors must be normalized, so the `Dot` product is enough instead of `MyMath.CosineDistance`.
-      var dot = (float)fire_direction.Dot(gun_direction);
-
-      // `dot` may be slightly out of the `cos` range due to floating point numbers, so we `Clamp` it to prevent
-      // getting the NaN from `Acos`.
-      var cos = MyMath.Clamp(dot, -1, 1);
-
-      var angle = (float)Math.Acos(cos);
-
-      return cos < 0 ? MathHelper.TwoPi - angle : angle;
-    }).ToArray();
-
-    var closest_gun_angle = gun_angles.MinBy(angle => {
-      var delta = Math.Abs(Rotor.Angle - angle);
-      // Ideally `delta == 0 ?`, but floating point numbers cause problems.
-      return delta < MathHelper.PiOver4 ? MathHelper.TwoPi : delta;
-    });
-
-    var next_angle_raw = Rotor.Angle + Math.Abs(Rotor.Angle - closest_gun_angle);
-    var next_angle_limited = Limit2Pi(next_angle_raw);
-    RotorAngle = AngleCalibre(next_angle_limited);
+  void SetRotorAngle(List<int> angles) {
+    var current_angle = CalibratedAngle(Rotor.Angle);
+    var next_angle = angles.MinBy(angle => Math.Abs(current_angle - angle));
+    RotorAngle = MathHelper.PiOver2 * next_angle;
   }
 
   void UpdatePistonVelocity() {
     if (Piston.MinLimit < Piston.MaxLimit) Piston.Velocity = Piston.MaxVelocity;
     else Piston.Velocity = -Piston.MaxVelocity;
-  }
-
-  float AngleCalibre(float radians) {
-    var angle = ANGLE_CALIBRE.MinBy(calibre => Math.Abs(calibre - radians));
-    return angle < MathHelper.TwoPi ? angle : 0;
   }
 
   void SetNextGunPlane() {
@@ -296,9 +252,9 @@ public sealed class Program : MyGridProgram {
 
   void InitGunSystem() {
 
-    Barrel.ForEach(level => level.ForEach(gun => gun.Enabled = false));
-    CurrentBarrelLevel = 0;
+    Barrel.SelectMany(level => level.Values).ToList().ForEach(gun => gun.Enabled = false);
     Gun = null;
+    CurrentBarrelLevel = 0;
 
     Piston.MinLimit = 0; // m
     Piston.MaxLimit = 0; // m
@@ -348,16 +304,15 @@ public sealed class Program : MyGridProgram {
 
   bool SetBarrel(IMyCubeGrid barrel) {
 
-    Barrel = GoUp()
+    Barrel = UpByAxis()
       .Select(SurroundingPositions)
-      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).OrderBy(GunBaseAngle).ToList())
+      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
       .TakeWhile(guns => guns.Count > 0)
-      .Reverse()
       .ToList();
 
     if (Barrel.Count <= 0) return false;
 
-    Hinges = GoUp()
+    Hinges = UpByAxis()
       .Select(DiagonalPositions)
       .Select(positions => Select<IMyMotorStator>(barrel, positions).ToList())
       .TakeWhile(hinges => hinges.Count > 0)
@@ -367,15 +322,19 @@ public sealed class Program : MyGridProgram {
     return Hinges.Count > 0;
   }
 
-  // Angle between `gun` *Forward* direction and `FireDirection` when `RotorAngle` is 0.
-  float GunBaseAngle(IMyUserControllableGun gun) {
-    return Limit2Pi(DirectionAngle(gun.WorldMatrix.Forward, RotorDirection) + RotorToFireAngle());
+  // Calibrated angle between `gun` *Forward* direction and `FireDirection` when `RotorAngle` is 0.
+  // When this angle equals to `CalibratedAngle(Rotor.Angle)`, then given `gun` can fire.
+  int GunWorkingAngle(IMyUserControllableGun gun) {
+    var gun_to_rotor_angle = DirectionAngle(gun.WorldMatrix.Forward, RotorDirection);
+    var gun_to_fire_angle = gun_to_rotor_angle + RotorToFireAngle();
+    var flipped_fire_angle = MathHelper.TwoPi - gun_to_fire_angle; // Flip 0.5π and 1.5π
+    return CalibratedAngle(flipped_fire_angle);
   }
 
-  IEnumerable<Vector3I> GoUp() {
-    // Start at the position of the attachable block, e.g. rotor top.
+  IEnumerable<Vector3I> UpByAxis() {
+    // Start from `Zero`.
     var position = Vector3I.Zero;
-    // Then go up the axis.
+    // Then go `Up` the axis.
     while (true) yield return position += Vector3I.Up;
   }
 
@@ -391,7 +350,7 @@ public sealed class Program : MyGridProgram {
 
   void DisplayStatus() {
 
-    var gun_ready = GunReady;
+    var gun_ready = GunReady(Gun) && Gun.Enabled;
 
     string state;
     if (gun_ready) state = "Gun Ready";
