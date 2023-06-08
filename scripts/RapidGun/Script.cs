@@ -31,6 +31,62 @@ public sealed class Program : MyGridProgram {
 
   #region RapidGun
 
+  static class U { // Utility
+
+    public static List<IMyBlockGroup> BlockGroups(IMyGridTerminalSystem grid, Func<IMyBlockGroup, bool> filter = null) {
+      var groups = new List<IMyBlockGroup>();
+      grid.GetBlockGroups(groups, filter);
+      return groups;
+    }
+
+    public static List<T> Select<T>(IMyBlockGroup group, Func<T, bool> filter = null) where T : class {
+      var blocks = new List<T>();
+      group.GetBlocksOfType<T>(blocks, filter);
+      return blocks;
+    }
+
+    public static IEnumerable<T> Select<T>(IMyCubeGrid grid, IEnumerable<Vector3I> positions) where T : class {
+      return positions
+        .Select(position => grid.GetCubeBlock(position)).OfType<IMySlimBlock>()
+        .Select(block => block.FatBlock as T).OfType<T>();
+    }
+
+    // Angle between normalized direction vectors `a` and `b` in range [-π .. π].
+    public static float DirectionAngle(Vector3D a, Vector3D b) {
+  
+      // `Dot` product is enough for normalized vectors. Instead of `MyMath.CosineDistance`.
+      var dot = (float)a.Dot(b);
+
+      // `dot` may be slightly out of the `cos` range due to floating point numbers.
+      // `Clamp` prevents further receipt of NaN from `Acos`.
+      var cos = MyMath.Clamp(dot, -1, 1);
+
+      var angle = (float)Math.Acos(cos);
+
+      return CopySign(angle, cos);
+    }
+
+    public static float CopySign(float value, float sign) {
+      return (value < 0) == (sign < 0) ? value : -value;
+    }
+
+    // Returns radians in the range [0 .. 2π].
+    // NOTE: similar function from `MathHelper` do not work!
+    public static float Limit2Pi(float radians) {
+      var arc = radians % MathHelper.TwoPi;
+      if (arc < 0) arc += MathHelper.TwoPi;
+      return arc;
+    }
+
+    // Returns radians in the range [-π .. π].
+    // NOTE: similar function from `MathHelper` do not work!
+    public static float LimitPi(float radians) {
+      if (radians > MathHelper.Pi) return radians % MathHelper.Pi - MathHelper.Pi;
+      if (radians < -MathHelper.Pi) return radians % MathHelper.Pi + MathHelper.Pi;
+      return radians;
+    }
+  }
+
   // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
   IMyPistonBase Piston;
 
@@ -79,7 +135,7 @@ public sealed class Program : MyGridProgram {
 
     InitLCD();
 
-    if (BlockGroups().FirstOrDefault(SetGunSystem) != null) InitGunSystem();
+    if (U.BlockGroups(GridTerminalSystem).FirstOrDefault(SetGunSystem) != null) InitGunSystem();
     // TODO: display init error
   }
 
@@ -139,7 +195,7 @@ public sealed class Program : MyGridProgram {
 
     get {
       // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
-      return Limit2Pi(Rotor.Angle);
+      return U.Limit2Pi(Rotor.Angle);
     }
 
     set {
@@ -157,7 +213,7 @@ public sealed class Program : MyGridProgram {
   // Angle (offset) between `FireDirection` and `RotorDirection` when `RotorAngle` is 0.
   float RotorToFireAngle() {
     // NOTE: `LimitPi` reflects the angle if needed.
-    return Math.Abs(DirectionAngle(FireDirection, RotorDirection)) - Math.Abs(LimitPi(RotorAngle));
+    return Math.Abs(U.DirectionAngle(FireDirection, RotorDirection)) - Math.Abs(U.LimitPi(RotorAngle));
   }
 
   void Slide() {
@@ -290,13 +346,13 @@ public sealed class Program : MyGridProgram {
 
   bool SetGunSystem(IMyBlockGroup group) {
 
-    var me = Select<IMyProgrammableBlock>(group, block => block == Me).FirstOrDefault();
+    var me = U.Select<IMyProgrammableBlock>(group, block => block == Me).FirstOrDefault();
     if (me == null) return false;
 
-    Piston = Select<IMyPistonBase>(group).FirstOrDefault();
+    Piston = U.Select<IMyPistonBase>(group).FirstOrDefault();
     if (Piston == null) return false;
 
-    Rotor = Select<IMyMotorAdvancedStator>(group).FirstOrDefault();
+    Rotor = U.Select<IMyMotorAdvancedStator>(group).FirstOrDefault();
     if (Rotor == null) return false;
 
     return SetBarrel(Rotor.TopGrid);
@@ -306,7 +362,8 @@ public sealed class Program : MyGridProgram {
 
     Barrel = UpByAxis()
       .Select(SurroundingPositions)
-      .Select(positions => Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
+      .Select(positions =>
+        U.Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
       .TakeWhile(guns => guns.Count > 0)
       .ToList();
 
@@ -314,7 +371,7 @@ public sealed class Program : MyGridProgram {
 
     Hinges = UpByAxis()
       .Select(DiagonalPositions)
-      .Select(positions => Select<IMyMotorStator>(barrel, positions).ToList())
+      .Select(positions => U.Select<IMyMotorStator>(barrel, positions).ToList())
       .TakeWhile(hinges => hinges.Count > 0)
       .SelectMany(hinges => hinges)
       .ToList();
@@ -325,7 +382,7 @@ public sealed class Program : MyGridProgram {
   // Calibrated angle between `gun` *Forward* direction and `FireDirection` when `RotorAngle` is 0.
   // When this angle equals to `CalibratedAngle(Rotor.Angle)`, then given `gun` can fire.
   int GunWorkingAngle(IMyUserControllableGun gun) {
-    var gun_to_rotor_angle = DirectionAngle(gun.WorldMatrix.Forward, RotorDirection);
+    var gun_to_rotor_angle = U.DirectionAngle(gun.WorldMatrix.Forward, RotorDirection);
     var gun_to_fire_angle = gun_to_rotor_angle + RotorToFireAngle();
     var flipped_fire_angle = MathHelper.TwoPi - gun_to_fire_angle; // Flip 0.5π and 1.5π
     return CalibratedAngle(flipped_fire_angle);
@@ -374,61 +431,6 @@ public sealed class Program : MyGridProgram {
 		KeyLCD.ClearImagesFromSelection();
     KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
   }
-
-  // TODO: group {{{
-  List<IMyBlockGroup> BlockGroups(Func<IMyBlockGroup, bool> filter = null) {
-    var groups = new List<IMyBlockGroup>();
-    GridTerminalSystem.GetBlockGroups(groups, filter);
-    return groups;
-  }
-
-  List<T> Select<T>(IMyBlockGroup group, Func<T, bool> filter = null) where T : class {
-		var blocks = new List<T>();
-		group.GetBlocksOfType<T>(blocks, filter);
-		return blocks;
-	}
-
-  IEnumerable<T> Select<T>(IMyCubeGrid grid, IEnumerable<Vector3I> positions) where T : class {
-    return positions
-      .Select(position => grid.GetCubeBlock(position)).OfType<IMySlimBlock>()
-      .Select(block => block.FatBlock as T).OfType<T>();
-  }
-
-  // Angle between normalized direction vectors `a` and `b` in range [-π .. π].
-  float DirectionAngle(Vector3D a, Vector3D b) {
-
-    // `Dot` product is enough for normalized vectors. Instead of `MyMath.CosineDistance`.
-    var dot = (float)a.Dot(b);
-
-    // `dot` may be slightly out of the `cos` range due to floating point numbers.
-    // `Clamp` prevents further receipt of NaN from `Acos`.
-    var cos = MyMath.Clamp(dot, -1, 1);
-
-    var angle = (float)Math.Acos(cos);
-
-    return CopySign(angle, cos);
-  }
-
-  float CopySign(float value, float sign) {
-    return (value < 0) == (sign < 0) ? value : -value;
-  }
-
-  // Returns radians in the range [0 .. 2π].
-  // NOTE: similar function from `MathHelper` do not work!
-  float Limit2Pi(float radians) {
-    var arc = radians % MathHelper.TwoPi;
-    if (arc < 0) arc += MathHelper.TwoPi;
-    return arc;
-  }
-
-  // Returns radians in the range [-π .. π].
-  // NOTE: similar function from `MathHelper` do not work!
-  float LimitPi(float radians) {
-    if (radians > MathHelper.Pi) return radians % MathHelper.Pi - MathHelper.Pi;
-    if (radians < -MathHelper.Pi) return radians % MathHelper.Pi + MathHelper.Pi;
-    return radians;
-  }
-  // TODO: group }}}
 
   #endregion // RapidGun
 }}
