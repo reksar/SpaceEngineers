@@ -33,10 +33,22 @@ public sealed class Program : MyGridProgram {
 
   static class U { // Utility
 
-    public static List<IMyBlockGroup> BlockGroups(IMyGridTerminalSystem grid, Func<IMyBlockGroup, bool> filter = null) {
+    public static List<IMyBlockGroup> SelectGroups(
+      IMyGridTerminalSystem grid,
+      Func<IMyBlockGroup, bool> filter = null
+    ) {
       var groups = new List<IMyBlockGroup>();
       grid.GetBlockGroups(groups, filter);
       return groups;
+    }
+
+    public static IEnumerable<T> Select<T>(
+      IMyGridTerminalSystem grid,
+      Func<IMyTerminalBlock, bool> filter = null
+    ) where T : class {
+      var blocks = new List<IMyTerminalBlock>();
+      grid.GetBlocksOfType<T>(blocks, filter);
+      return blocks.Cast<T>();
     }
 
     public static List<T> Select<T>(IMyBlockGroup group, Func<T, bool> filter = null) where T : class {
@@ -133,7 +145,7 @@ public sealed class Program : MyGridProgram {
 
   Program() {
     InitLCDs();
-    if (SetRapidGun()) InitRapidGun(); else DisplayInitError();
+    if (SetGunSystem()) InitGunSystem(); else DisplayInitError();
   }
 
   // Will run with the `UpdateFrequency` set at the end of `InitGunSystem`. Or won't run on init fail.
@@ -162,11 +174,42 @@ public sealed class Program : MyGridProgram {
 		lcd.ClearImagesFromSelection();
   }
 
-  bool SetRapidGun() {
-    return U.BlockGroups(GridTerminalSystem).FirstOrDefault(SetGunSystem) != null;
+  bool SetGunSystem() {
+
+    Piston = U.Select<IMyPistonBase>(GridTerminalSystem).FirstOrDefault(piston => {
+
+      var block = piston.TopGrid.GetCubeBlock(Vector3I.Up);
+      if (block == null) return false;
+
+      Rotor = block.FatBlock as IMyMotorAdvancedStator;
+      return Rotor != null && SetBarrel(Rotor.TopGrid);
+    });
+
+    return Piston != null;
   }
 
-  void InitRapidGun() {
+  bool SetBarrel(IMyCubeGrid barrel) {
+
+    Barrel = UpByAxis()
+      .Select(SurroundingPositions)
+      .Select(positions =>
+        U.Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
+      .TakeWhile(guns => guns.Count > 0)
+      .ToList();
+
+    if (Barrel.Count <= 0) return false;
+
+    Hinges = UpByAxis()
+      .Select(DiagonalPositions)
+      .Select(positions => U.Select<IMyMotorStator>(barrel, positions).ToList())
+      .TakeWhile(hinges => hinges.Count > 0)
+      .SelectMany(hinges => hinges)
+      .ToList();
+
+    return Hinges.Count > 0;
+  }
+
+  void InitGunSystem() {
 
     Barrel.SelectMany(level => level.Values).ToList().ForEach(gun => gun.Enabled = false);
     Gun = null;
@@ -379,41 +422,6 @@ public sealed class Program : MyGridProgram {
     // NOTE: expects `GunPlanes` are close together! Thus we iterate through the planes with `BlockSize`.
     Piston.MaxLimit = CurrentBarrelLevel * BlockSize; // m
     UpdatePistonVelocity();
-  }
-
-  bool SetGunSystem(IMyBlockGroup group) {
-
-    var me = U.Select<IMyProgrammableBlock>(group, block => block == Me).FirstOrDefault();
-    if (me == null) return false;
-
-    Piston = U.Select<IMyPistonBase>(group).FirstOrDefault();
-    if (Piston == null) return false;
-
-    Rotor = U.Select<IMyMotorAdvancedStator>(group).FirstOrDefault();
-    if (Rotor == null) return false;
-
-    return SetBarrel(Rotor.TopGrid);
-  }
-
-  bool SetBarrel(IMyCubeGrid barrel) {
-
-    Barrel = UpByAxis()
-      .Select(SurroundingPositions)
-      .Select(positions =>
-        U.Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
-      .TakeWhile(guns => guns.Count > 0)
-      .ToList();
-
-    if (Barrel.Count <= 0) return false;
-
-    Hinges = UpByAxis()
-      .Select(DiagonalPositions)
-      .Select(positions => U.Select<IMyMotorStator>(barrel, positions).ToList())
-      .TakeWhile(hinges => hinges.Count > 0)
-      .SelectMany(hinges => hinges)
-      .ToList();
-
-    return Hinges.Count > 0;
   }
 
   // Calibrated angle between `gun` *Forward* direction and `FireDirection` when `RotorAngle` is 0.
