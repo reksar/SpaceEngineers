@@ -132,11 +132,8 @@ public sealed class Program : MyGridProgram {
   });
 
   Program() {
-
-    InitLCD();
-
-    if (U.BlockGroups(GridTerminalSystem).FirstOrDefault(SetGunSystem) != null) InitGunSystem();
-    // TODO: display init error
+    InitLCDs();
+    if (SetRapidGun()) InitRapidGun(); else DisplayInitError();
   }
 
   // Will run with the `UpdateFrequency` set at the end of `InitGunSystem`. Or won't run on init fail.
@@ -151,16 +148,94 @@ public sealed class Program : MyGridProgram {
     DisplayStatus();
   }
 
-  void InitLCD() {
-
+  void InitLCDs() {
 		LCD = Me.GetSurface(0);
-		LCD.ContentType = ContentType.TEXT_AND_IMAGE;
-    LCD.BackgroundColor = Color.Black;
-    LCD.WriteText("");
-
 		KeyLCD = Me.GetSurface(1);
-		KeyLCD.ContentType = ContentType.TEXT_AND_IMAGE;
-    KeyLCD.BackgroundColor = Color.Black;
+    InitLCD(LCD);
+    InitLCD(KeyLCD);
+  }
+
+  void InitLCD(IMyTextSurface lcd) {
+		lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+    lcd.BackgroundColor = Color.Black;
+    lcd.WriteText("");
+		lcd.ClearImagesFromSelection();
+  }
+
+  bool SetRapidGun() {
+    return U.BlockGroups(GridTerminalSystem).FirstOrDefault(SetGunSystem) != null;
+  }
+
+  void InitRapidGun() {
+
+    Barrel.SelectMany(level => level.Values).ToList().ForEach(gun => gun.Enabled = false);
+    Gun = null;
+    CurrentBarrelLevel = 0;
+
+    Piston.MinLimit = 0; // m
+    Piston.MaxLimit = 0; // m
+    BlockSize = Me.CubeGrid.GridSize; // m
+    UpdatePistonVelocity();
+
+    Rotor.Displacement = -0.3f; // m
+    Rotor.TargetVelocityRad = 0;
+    Rotor.Torque = 0;
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
+    Rotor.RotorLock = true;
+    RotorAngle = 0;
+    RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
+
+    Hinges.ForEach(hinge => {
+
+      // NOTE: Mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
+      // into the holes in the hull blocks when braking the `Rotor`.
+      //
+      // NOTE: This mechanic is currently buggy, but it is enough have at least one hinge in neutral position
+      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base (stator) in
+      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than this init.
+      hinge.LowerLimitRad = 0;
+      hinge.UpperLimitRad = MathHelper.PiOver2;
+      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max
+
+      hinge.Torque = 33000000; // N*m
+      hinge.BrakingTorque = 0;
+    });
+
+    Runtime.UpdateFrequency = UpdateFrequency.Update10;
+  }
+
+  void DisplayInitError() {
+		LCD.ClearImagesFromSelection();
+    LCD.AddImageToSelection("Cross");
+		KeyLCD.ClearImagesFromSelection();
+    KeyLCD.AddImageToSelection("Cross");
+  }
+
+  void DisplayStatus() {
+
+    var gun_ready = GunReady(Gun) && Gun.Enabled;
+
+    string state;
+    if (gun_ready) state = "Gun Ready";
+    else if (!PistonInPosition) state = "Sliding ...";
+    else if (!RotorInPosition) state = "Rotating ...";
+    else if (!RotorStopped) state = "Braking ...";
+    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
+    else state = "Unknown state";
+
+    var rotor_angle_abs = MathHelper.RoundToInt(MathHelper.ToDegrees(Rotor.Angle));
+    var rotor_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle));
+    var target_angle = Math.Round(Rotor.UpperLimitDeg);
+    var locked = Rotor.RotorLock ? "Locked" : "";
+
+    LCD.WriteText(
+      state+"\n"+
+      "Barrel Level: "+CurrentBarrelLevel+"\n"+
+      "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
+    );
+
+		KeyLCD.ClearImagesFromSelection();
+    KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
   }
 
   bool PistonInPosition { get {
@@ -306,44 +381,6 @@ public sealed class Program : MyGridProgram {
     UpdatePistonVelocity();
   }
 
-  void InitGunSystem() {
-
-    Barrel.SelectMany(level => level.Values).ToList().ForEach(gun => gun.Enabled = false);
-    Gun = null;
-    CurrentBarrelLevel = 0;
-
-    Piston.MinLimit = 0; // m
-    Piston.MaxLimit = 0; // m
-    BlockSize = Me.CubeGrid.GridSize; // m
-    UpdatePistonVelocity();
-
-    Rotor.Displacement = -0.3f; // m
-    Rotor.TargetVelocityRad = 0;
-    Rotor.Torque = 0;
-    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
-    Rotor.RotorLock = true;
-    RotorAngle = 0;
-    RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
-
-    Hinges.ForEach(hinge => {
-
-      // NOTE: Mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
-      // into the holes in the hull blocks when braking the `Rotor`.
-      //
-      // NOTE: This mechanic is currently buggy, but it is enough have at least one hinge in neutral position
-      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base (stator) in
-      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than this init.
-      hinge.LowerLimitRad = 0;
-      hinge.UpperLimitRad = MathHelper.PiOver2;
-      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max
-
-      hinge.Torque = 33000000; // N*m
-      hinge.BrakingTorque = 0;
-    });
-
-    Runtime.UpdateFrequency = UpdateFrequency.Update10;
-  }
-
   bool SetGunSystem(IMyBlockGroup group) {
 
     var me = U.Select<IMyProgrammableBlock>(group, block => block == Me).FirstOrDefault();
@@ -403,33 +440,6 @@ public sealed class Program : MyGridProgram {
   // Positions from the `center` in 4 `DIAGONAL_DIRECTIONS`.
   IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
     return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
-  }
-
-  void DisplayStatus() {
-
-    var gun_ready = GunReady(Gun) && Gun.Enabled;
-
-    string state;
-    if (gun_ready) state = "Gun Ready";
-    else if (!PistonInPosition) state = "Sliding ...";
-    else if (!RotorInPosition) state = "Rotating ...";
-    else if (!RotorStopped) state = "Braking ...";
-    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
-    else state = "Unknown state";
-
-    var rotor_angle_abs = MathHelper.RoundToInt(MathHelper.ToDegrees(Rotor.Angle));
-    var rotor_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle));
-    var target_angle = Math.Round(Rotor.UpperLimitDeg);
-    var locked = Rotor.RotorLock ? "Locked" : "";
-
-    LCD.WriteText(
-      state+"\n"+
-      "Barrel Level: "+CurrentBarrelLevel+"\n"+
-      "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
-    );
-
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
   }
 
   #endregion // RapidGun
