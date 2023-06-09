@@ -116,11 +116,6 @@ public sealed class Program : MyGridProgram {
   // Current active gun in `FireDirection`.
   IMyUserControllableGun Gun; 
 
-  // Hinges and attached wheels are used to brake the `Rotor`.
-  // NOTE: this mechanic is currently buggy (see `InitGunSystem`).
-  // NOTE: There is no interface for the *hinge* terminal block, but `IMyMotorStator` should do.
-  List<IMyMotorStator> Hinges;
-
   // Will be different for *large* and *small* grids.
   float BlockSize; // m
 
@@ -197,16 +192,7 @@ public sealed class Program : MyGridProgram {
       .TakeWhile(guns => guns.Count > 0)
       .ToList();
 
-    if (Barrel.Count <= 0) return false;
-
-    Hinges = UpByAxis()
-      .Select(DiagonalPositions)
-      .Select(positions => U.Select<IMyMotorStator>(barrel, positions).ToList())
-      .TakeWhile(hinges => hinges.Count > 0)
-      .SelectMany(hinges => hinges)
-      .ToList();
-
-    return Hinges.Count > 0;
+    return Barrel.Count > 0;
   }
 
   void InitGunSystem() {
@@ -227,22 +213,6 @@ public sealed class Program : MyGridProgram {
     Rotor.RotorLock = true;
     RotorAngle = 0;
     RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
-
-    Hinges.ForEach(hinge => {
-
-      // NOTE: Mind the blocks orientation! The 1x1 wheels (without suspension) connected to a hinge top part must fall
-      // into the holes in the hull blocks when braking the `Rotor`.
-      //
-      // NOTE: This mechanic is currently buggy, but it is enough have at least one hinge in neutral position
-      // (when wheel is up and not brakes the `Rotor`) and 4 hangar blocks connected to the `Rotor` base (stator) in
-      // the form of a cross (in `SURROUNDING_DIRECTIONS`). No additional hinge control is needed other than this init.
-      hinge.LowerLimitRad = 0;
-      hinge.UpperLimitRad = MathHelper.PiOver2;
-      hinge.TargetVelocityRad = -MathHelper.Pi; // rad/s, max
-
-      hinge.Torque = 33000000; // N*m
-      hinge.BrakingTorque = 0;
-    });
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
