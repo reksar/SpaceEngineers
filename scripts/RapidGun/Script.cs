@@ -218,18 +218,27 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisplayInitError() {
-		LCD.ClearImagesFromSelection();
-    LCD.AddImageToSelection("Cross");
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection("Cross");
+    DisplayImage(LCD, "Cross");
+    DisplayImage(KeyLCD, "Cross");
   }
 
   void DisplayStatus() {
+    var status_image = (GunReady(Gun) && Gun.Enabled) ? "Arrow" : "Danger";
+		DisplayImage(KeyLCD, status_image);
+    if (InDebug) DisplayDebug(LCD);
+    else DisplayImage(LCD, status_image);
+  }
 
-    var gun_ready = GunReady(Gun) && Gun.Enabled;
+  void DisplayImage(IMyTextSurface lcd, string image) {
+    lcd.WriteText("");
+		lcd.ClearImagesFromSelection();
+    lcd.AddImageToSelection(image);
+  }
+
+  void DisplayDebug(IMyTextSurface lcd) {
 
     string state;
-    if (gun_ready) state = "Gun Ready";
+    if (GunReady(Gun) && Gun.Enabled) state = "Gun Ready";
     else if (!PistonInPosition) state = "Sliding ...";
     else if (!RotorInPosition) state = "Rotating ...";
     else if (!RotorStopped) state = "Braking ...";
@@ -247,9 +256,12 @@ public sealed class Program : MyGridProgram {
       "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
     );
 
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
+    lcd.ClearImagesFromSelection();
   }
+
+  bool InDebug { get {
+    return Me.ShowOnHUD;
+  }}
 
   bool PistonInPosition { get {
     return Piston.CurrentPosition == (Piston.Velocity < 0 ? Piston.MinLimit : Piston.MaxLimit);
