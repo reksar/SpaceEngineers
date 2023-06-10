@@ -97,6 +97,26 @@ public sealed class Program : MyGridProgram {
       if (radians < -MathHelper.Pi) return radians % MathHelper.Pi + MathHelper.Pi;
       return radians;
     }
+
+    // Positions surrounding the `center` in 4 base directions.
+    public static ImmutableList<Vector3I> SurroundingPositions(Vector3I center) {
+      return ImmutableList.Create(new Vector3I[] {
+        Vector3I.Forward + center,
+        Vector3I.Right + center,
+        Vector3I.Backward + center,
+        Vector3I.Left + center
+      });
+    }
+
+    // Positions from the `center` in 4 diagonal directions.
+    public static ImmutableList<Vector3I> DiagonalPositions(Vector3I center) {
+      return ImmutableList.Create(new Vector3I[] {
+        Vector3I.Forward + Vector3I.Left + center,
+        Vector3I.Forward + Vector3I.Right + center,
+        Vector3I.Backward + Vector3I.Left + center,
+        Vector3I.Backward + Vector3I.Right + center
+      });
+    }
   }
 
   // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
@@ -122,21 +142,6 @@ public sealed class Program : MyGridProgram {
   IMyTextSurface LCD, KeyLCD;
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
-
-  // Directions on a 2D square grid representing a gun plane - the barrel cross section.
-  // TODO: move it to a local scope.
-  ImmutableList<Vector3I> SURROUNDING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
-    Vector3I.Forward,
-    Vector3I.Right,
-    Vector3I.Backward,
-    Vector3I.Left
-  });
-  ImmutableList<Vector3I> DIAGONAL_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
-    Vector3I.Forward + Vector3I.Left,
-    Vector3I.Forward + Vector3I.Right,
-    Vector3I.Backward + Vector3I.Left,
-    Vector3I.Backward + Vector3I.Right
-  });
 
   Program() {
     InitLCDs();
@@ -186,7 +191,7 @@ public sealed class Program : MyGridProgram {
   bool SetBarrel(IMyCubeGrid barrel) {
 
     Barrel = UpByAxis()
-      .Select(SurroundingPositions)
+      .Select(U.SurroundingPositions)
       .Select(positions =>
         U.Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
       .TakeWhile(guns => guns.Count > 0)
@@ -223,7 +228,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisplayStatus() {
-    var status_image = (GunReady(Gun) && Gun.Enabled) ? "Arrow" : "Danger";
+    var status_image = GunReady(Gun) ? "Arrow" : "Danger";
 		DisplayImage(KeyLCD, status_image);
     if (InDebug) DisplayDebug(LCD);
     else DisplayImage(LCD, status_image);
@@ -238,7 +243,7 @@ public sealed class Program : MyGridProgram {
   void DisplayDebug(IMyTextSurface lcd) {
 
     string state;
-    if (GunReady(Gun) && Gun.Enabled) state = "Gun Ready";
+    if (GunReady(Gun)) state = "Gun Ready";
     else if (!PistonInPosition) state = "Sliding ...";
     else if (!RotorInPosition) state = "Rotating ...";
     else if (!RotorStopped) state = "Braking ...";
@@ -362,7 +367,7 @@ public sealed class Program : MyGridProgram {
 
     if (Gun == null) Gun = GunPlane[CalibratedAngle(Rotor.Angle)];
 
-    if (GunReady(Gun)) Gun.Enabled = true;
+    if (GunAvailable(Gun)) Gun.Enabled = true;
     else SwitchGun();
   }
 
@@ -378,13 +383,18 @@ public sealed class Program : MyGridProgram {
     Gun = null;
 
     // TODO: search for a closest gun in the entire system
-    var available_angles = GunPlane.Where(i => GunReady(i.Value)).Select(i => i.Key).ToList();
+    var available_angles = GunPlane.Where(i => GunAvailable(i.Value)).Select(i => i.Key).ToList();
     if (available_angles.Count > 0) SetRotorAngle(available_angles);
     else SetNextGunPlane();
   }
 
-  bool GunReady(IMyUserControllableGun gun) {
+  bool GunAvailable(IMyUserControllableGun gun) {
     return gun != null && !gun.IsShooting && gun.IsFunctional;
+  }
+
+  // TODO: change this after debugging
+  bool GunReady(IMyUserControllableGun gun) {
+    return GunAvailable(gun) && gun.Enabled;
   }
 
   void SetRotorAngle(List<int> angles) {
@@ -422,15 +432,7 @@ public sealed class Program : MyGridProgram {
     while (true) yield return position += Vector3I.Up;
   }
 
-  // Positions surrounding the `center` in 4 `SURROUNDING_DIRECTIONS`.
-  IEnumerable<Vector3I> SurroundingPositions(Vector3I center) {
-    return SURROUNDING_DIRECTIONS.Select(direction => direction + center);
-  }
 
-  // Positions from the `center` in 4 `DIAGONAL_DIRECTIONS`.
-  IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
-    return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
-  }
 
   #endregion // RapidGun
 }}
