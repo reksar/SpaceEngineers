@@ -230,7 +230,7 @@ public sealed class Program : MyGridProgram {
   void DisplayStatus() {
     var status_image = GunReady(Gun) ? "Arrow" : "Danger";
 		DisplayImage(KeyLCD, status_image);
-    if (InDebug) DisplayDebug(LCD);
+    if (InDebug) DisplayDebugInfo(LCD);
     else DisplayImage(LCD, status_image);
   }
 
@@ -240,25 +240,25 @@ public sealed class Program : MyGridProgram {
     lcd.AddImageToSelection(image);
   }
 
-  void DisplayDebug(IMyTextSurface lcd) {
+  void DisplayDebugInfo(IMyTextSurface lcd) {
 
     string state;
-    if (GunReady(Gun)) state = "Gun Ready";
-    else if (!PistonInPosition) state = "Sliding ...";
-    else if (!RotorInPosition) state = "Rotating ...";
-    else if (!RotorStopped) state = "Braking ...";
-    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
-    else state = "Unknown state";
+    if (GunReady(Gun)) state = "Ready";
+    else if (!PistonInPosition) state = "Sliding";
+    else if (!RotorInPosition) state = "Rotating";
+    else if (!RotorStopped) state = "Braking";
+    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun";
+    else state = "Unknown State";
 
-    var rotor_angle_abs = MathHelper.RoundToInt(MathHelper.ToDegrees(Rotor.Angle));
-    var rotor_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle));
-    var target_angle = Math.Round(Rotor.UpperLimitDeg);
-    var locked = Rotor.RotorLock ? "Locked" : "";
+    var current_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle)).ToString();
+    var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
+    string angle_info = current_angle + (RotorInPosition ? "" : "/" + desired_angle) + "°";
+
+    string level_info = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
+      CurrentBarrelLevel.ToString();
 
     LCD.WriteText(
-      state+"\n"+
-      "Barrel Level: "+CurrentBarrelLevel+"\n"+
-      "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
+      state+" "+angle_info+" "+level_info
     );
 
     lcd.ClearImagesFromSelection();
