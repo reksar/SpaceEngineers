@@ -252,16 +252,68 @@ public sealed class Program : MyGridProgram {
 
     var current_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle)).ToString();
     var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
-    string angle_info = current_angle + (RotorInPosition ? "" : "/" + desired_angle) + "°";
+    var angle_info = current_angle + (Rotor.RotorLock ? "" : "/" + desired_angle) + "°";
 
-    string level_info = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
+    var level_info = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
       CurrentBarrelLevel.ToString();
 
+    var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
+
     LCD.WriteText(
-      state+" "+angle_info+" "+level_info
+      state+" "+angle_info+" "+level_info+"\n\n"+
+      diagram
     );
 
     lcd.ClearImagesFromSelection();
+  }
+
+  string BarrelDiagramLocked() {
+
+    string y_spacer = new string(' ', 2 * (Barrel.Count + 1));
+
+    string diagram = "";
+
+    GunsInDirection(Base6Directions.Direction.Forward).ToList()
+      .ForEach(gun => diagram += y_spacer + GunChar(gun) + "\n");
+
+    GunsInDirection(Base6Directions.Direction.Left).ToList()
+      .ForEach(gun => diagram += GunChar(gun) + " ");
+
+    diagram += "  ";
+
+    GunsInDirection(Base6Directions.Direction.Right).ToList()
+      .ForEach(gun => diagram += GunChar(gun) + " ");
+
+    diagram += "\n";
+
+    GunsInDirection(Base6Directions.Direction.Backward).ToList()
+      .ForEach(gun => diagram += y_spacer + GunChar(gun) + "\n");
+
+    return diagram;
+  }
+
+  // TODO:
+  string BarrelDiagramRotation() {
+
+    string diagram = "";
+
+    return diagram;
+  }
+
+  IEnumerable<IMyUserControllableGun> GunsInDirection(Base6Directions.Direction direction) {
+    return Enumerable.Range(0, Barrel.Count)
+      .Select(level => Barrel[level].Values)
+      .Select(guns => guns.First(gun => GunDirection(gun) == direction));
+  }
+
+  Base6Directions.Direction GunDirection(IMyUserControllableGun gun) {
+    Matrix orientation;
+    gun.Orientation.GetMatrix(out orientation);
+    return Base6Directions.GetClosestDirection(orientation.Forward);
+  }
+
+  char GunChar(IMyUserControllableGun gun) {
+    return GunReady(gun) ? '^' : (GunAvailable(gun) ? '+' : '-');
   }
 
   bool InDebug { get {
@@ -431,8 +483,6 @@ public sealed class Program : MyGridProgram {
     // Then go `Up` the axis.
     while (true) yield return position += Vector3I.Up;
   }
-
-
 
   #endregion // RapidGun
 }}
