@@ -267,19 +267,24 @@ public sealed class Program : MyGridProgram {
     lcd.ClearImagesFromSelection();
   }
 
+  //     +
+  //     ^
+  // + +   + +
+  //     +
+  //     +
   string BarrelDiagramLocked() {
 
-    string y_spacer = new string(' ', 2 * (Barrel.Count + 1));
+    string spacer_y = new string(' ', 2 * Barrel.Count);
 
     string diagram = "";
 
     GunsInDirection(Base6Directions.Direction.Forward).ToList()
-      .ForEach(gun => diagram += y_spacer + GunChar(gun) + "\n");
+      .ForEach(gun => diagram += spacer_y + GunChar(gun) + "\n");
 
     GunsInDirection(Base6Directions.Direction.Left).ToList()
       .ForEach(gun => diagram += GunChar(gun) + " ");
 
-    diagram += "  ";
+    diagram += " ";
 
     GunsInDirection(Base6Directions.Direction.Right).ToList()
       .ForEach(gun => diagram += GunChar(gun) + " ");
@@ -287,12 +292,16 @@ public sealed class Program : MyGridProgram {
     diagram += "\n";
 
     GunsInDirection(Base6Directions.Direction.Backward).ToList()
-      .ForEach(gun => diagram += y_spacer + GunChar(gun) + "\n");
+      .ForEach(gun => diagram += spacer_y + GunChar(gun) + "\n");
 
     return diagram;
   }
 
   // TODO:
+  // +      +
+  //   +  +
+  //   +  +
+  // +      +
   string BarrelDiagramRotation() {
 
     string diagram = "";
@@ -303,13 +312,27 @@ public sealed class Program : MyGridProgram {
   IEnumerable<IMyUserControllableGun> GunsInDirection(Base6Directions.Direction direction) {
     return Enumerable.Range(0, Barrel.Count)
       .Select(level => Barrel[level].Values)
-      .Select(guns => guns.First(gun => GunDirection(gun) == direction));
+      .Select(guns => guns.FirstOrDefault(gun => GunDirection(gun) == direction));
   }
 
+  // TODO: get rid of the WorldMatrix
   Base6Directions.Direction GunDirection(IMyUserControllableGun gun) {
+
     Matrix orientation;
     gun.Orientation.GetMatrix(out orientation);
-    return Base6Directions.GetClosestDirection(orientation.Forward);
+
+    // [0 .. π]
+    var offset_abs_angle = (float)Vector3.Angle(Me.CubeGrid.WorldMatrix.Forward, Rotor.WorldMatrix.Forward);
+
+    var offset_angle = offset_abs_angle * Vector3.SignNonZero(Rotor.WorldMatrix.Forward).X;
+    var angle = MathHelper.TwoPi - U.Limit2Pi(Rotor.Angle + offset_angle);
+    var rotation = Matrix.CreateRotationY(angle);
+
+    Matrix result;
+    Matrix.MultiplyRotation(ref orientation, ref rotation, out result);
+
+    var direction = Base6Directions.GetForward(ref result);
+    return direction;
   }
 
   char GunChar(IMyUserControllableGun gun) {
