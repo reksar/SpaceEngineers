@@ -315,24 +315,31 @@ public sealed class Program : MyGridProgram {
       .Select(guns => guns.FirstOrDefault(gun => GunDirection(gun) == direction));
   }
 
-  // TODO: get rid of the WorldMatrix
   Base6Directions.Direction GunDirection(IMyUserControllableGun gun) {
 
-    Matrix orientation;
-    gun.Orientation.GetMatrix(out orientation);
+    // Orientation of the fire direction of an active gun relative to the main grid.
+    var fire_orientation = Base6Directions.GetOrientation(
+      Base6Directions.Direction.Backward,
+      Base6Directions.Direction.Up
+    );
 
-    // [0 .. π]
-    var offset_abs_angle = (float)Vector3.Angle(Me.CubeGrid.WorldMatrix.Forward, Rotor.WorldMatrix.Forward);
+    Quaternion piston_orientation;
+    Piston.Orientation.GetQuaternion(out piston_orientation);
 
-    var offset_angle = offset_abs_angle * Vector3.SignNonZero(Rotor.WorldMatrix.Forward).X;
-    var angle = MathHelper.TwoPi - U.Limit2Pi(Rotor.Angle + offset_angle);
-    var rotation = Matrix.CreateRotationY(angle);
+    Quaternion stator_orientation;
+    Rotor.Orientation.GetQuaternion(out stator_orientation);
 
-    Matrix result;
-    Matrix.MultiplyRotation(ref orientation, ref rotation, out result);
+    var rotor_orientation = Quaternion.CreateFromAxisAngle(
+      Base6Directions.GetVector(Rotor.Orientation.Up),
+      Rotor.Angle
+    );
 
-    var direction = Base6Directions.GetForward(ref result);
-    return direction;
+    Quaternion gun_orientation;
+    gun.Orientation.GetQuaternion(out gun_orientation);
+
+    return Base6Directions.GetForward(
+      fire_orientation * gun_orientation * piston_orientation * stator_orientation * rotor_orientation
+    );
   }
 
   char GunChar(IMyUserControllableGun gun) {
