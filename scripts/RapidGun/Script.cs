@@ -295,6 +295,7 @@ public sealed class Program : MyGridProgram {
     var level_info = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
       CurrentBarrelLevel.ToString();
 
+    // TODO: show missed guns on the barrel
     var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
 
     LCD.WriteText(
@@ -312,11 +313,11 @@ public sealed class Program : MyGridProgram {
   //     +
   string BarrelDiagramLocked() {
 
-    string spacer_y = new string(' ', 2 * TestBarrel.Count);
+    string spacer_y = new string(' ', 3 * TestBarrel.Count - 1);
 
     string diagram = "";
 
-    GunsInDirection(Base6Directions.Direction.Forward).ToList()
+    GunsInDirection(Base6Directions.Direction.Forward).Reverse().ToList()
       .ForEach(gun => diagram += spacer_y + GunChar(gun) + "\n");
 
     GunsInDirection(Base6Directions.Direction.Left).ToList()
