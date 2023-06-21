@@ -336,7 +336,6 @@ public sealed class Program : MyGridProgram {
     return diagram;
   }
 
-  // FIXME: do not jump to the next circle quarter when the Δ`Rotor.Angle` > 0.25π
   // +      +
   //   +  +
   //   +  +
@@ -397,7 +396,7 @@ public sealed class Program : MyGridProgram {
   // There are 4 calibrated angles of the `Rotor` where it locked: 0, 0.5π, π, 1.5π.
   // They correspond to 4 quarters of a circle: 0 / 0.5π = 0, 0.5π / 0.5π = 1, π / 0.5π = 2, 1.5π / 0.5π = 3.
   int RotorQuarter { get {
-    return MathHelper.RoundToInt(RotorAngle / MathHelper.PiOver2);
+    return MathHelper.Floor(RotorAngle / MathHelper.PiOver2);
   }}
 
   char GunChar(IMyUserControllableGun gun) {
