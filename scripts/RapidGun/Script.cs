@@ -313,12 +313,12 @@ public sealed class Program : MyGridProgram {
   //     +
   string BarrelDiagramLocked() {
 
-    string spacer_y = new string(' ', 3 * TestBarrel.Count - 1);
-
     string diagram = "";
 
+    string left_spacer = new string(' ', 3 * TestBarrel.Count - 1);
+
     GunsInDirection(Base6Directions.Direction.Forward).Reverse().ToList()
-      .ForEach(gun => diagram += spacer_y + GunChar(gun) + "\n");
+      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
 
     GunsInDirection(Base6Directions.Direction.Left).ToList()
       .ForEach(gun => diagram += GunChar(gun) + " ");
@@ -331,12 +331,12 @@ public sealed class Program : MyGridProgram {
     diagram += "\n";
 
     GunsInDirection(Base6Directions.Direction.Backward).ToList()
-      .ForEach(gun => diagram += spacer_y + GunChar(gun) + "\n");
+      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
 
     return diagram;
   }
 
-  // TODO:
+  // FIXME: do not jump to the next circle quarter when the Δ`Rotor.Angle` > 0.25π
   // +      +
   //   +  +
   //   +  +
@@ -345,7 +345,33 @@ public sealed class Program : MyGridProgram {
 
     string diagram = "";
 
+    foreach (var level in BarrelLevels.Reverse()) {
+      var guns = TestBarrel[level];
+      var left_gun = guns[Quarter(Base6Directions.Direction.Left)];
+      var forward_gun = guns[Quarter(Base6Directions.Direction.Forward)];
+      diagram += LeftSpacer(level) + GunChar(left_gun) + CenterSpacer(level) + GunChar(forward_gun) + "\n";
+    }
+
+    foreach (var level in BarrelLevels) {
+      var guns = TestBarrel[level];
+      var backward_gun = guns[Quarter(Base6Directions.Direction.Backward)];
+      var right_gun = guns[Quarter(Base6Directions.Direction.Right)];
+      diagram += LeftSpacer(level) + GunChar(backward_gun) + CenterSpacer(level) + GunChar(right_gun) + "\n";
+    }
+
     return diagram;
+  }
+
+  IEnumerable<int> BarrelLevels { get {
+    return Enumerable.Range(0, TestBarrel.Count);
+  }}
+
+  string LeftSpacer(int barrel_level) {
+    return new string(' ', 2 * (TestBarrel.Count - barrel_level));
+  }
+
+  string CenterSpacer(int barrel_level) {
+    return new string(' ', 4 * barrel_level + 2);
   }
 
   // All guns on the `Barrel` pointing in actual `direction`.
