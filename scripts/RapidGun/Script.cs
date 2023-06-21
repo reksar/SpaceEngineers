@@ -97,6 +97,31 @@ public sealed class Program : MyGridProgram {
       if (radians < -MathHelper.Pi) return radians % MathHelper.Pi + MathHelper.Pi;
       return radians;
     }
+
+    // Positions surrounding the `center` in 4 base directions.
+    public static ImmutableList<Vector3I> CrissCrossPositions(Vector3I center) {
+      return ImmutableList.Create(new Vector3I[] {
+        Vector3I.Forward + center,
+        Vector3I.Right + center,
+        Vector3I.Backward + center,
+        Vector3I.Left + center
+      });
+    }
+
+    // Positions from the `center` in 4 diagonal directions.
+    public static ImmutableList<Vector3I> DiagonalPositions(Vector3I center) {
+      return ImmutableList.Create(new Vector3I[] {
+        Vector3I.Forward + Vector3I.Left + center,
+        Vector3I.Forward + Vector3I.Right + center,
+        Vector3I.Backward + Vector3I.Left + center,
+        Vector3I.Backward + Vector3I.Right + center
+      });
+    }
+
+    public static IEnumerable<Vector3I> EndlessUp() {
+      var position = Vector3I.Zero; // Initial value will not be yielded.
+      while (true) yield return position += Vector3I.Up;
+    }
   }
 
   // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
@@ -110,7 +135,8 @@ public sealed class Program : MyGridProgram {
   // `Rotor`s top grid is the `Barrel`. Consists of identical *levels* grouped in a `List`. Each *level* is radially
   // symmetrical and has a gun in each of the 4 base directions on the plane. An `int` key of the `Dictionary` is the
   // `GunBaseAngle` of the related gun.
-  List<Dictionary<int, IMyUserControllableGun>> Barrel;
+  List<Dictionary<int, IMyUserControllableGun>> Barrel; // TODO: replace with TestBarrel
+  List<List<IMyUserControllableGun>> TestBarrel;
   int CurrentBarrelLevel;
 
   // Current active gun in `FireDirection`.
@@ -122,21 +148,6 @@ public sealed class Program : MyGridProgram {
   IMyTextSurface LCD, KeyLCD;
 
   const float MAX_ROTOR_TORQUE = 1000000000; // N*m
-
-  // Directions on a 2D square grid representing a gun plane - the barrel cross section.
-  // TODO: move it to a local scope.
-  ImmutableList<Vector3I> SURROUNDING_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
-    Vector3I.Forward,
-    Vector3I.Right,
-    Vector3I.Backward,
-    Vector3I.Left
-  });
-  ImmutableList<Vector3I> DIAGONAL_DIRECTIONS = ImmutableList.Create(new Vector3I[] {
-    Vector3I.Forward + Vector3I.Left,
-    Vector3I.Forward + Vector3I.Right,
-    Vector3I.Backward + Vector3I.Left,
-    Vector3I.Backward + Vector3I.Right
-  });
 
   Program() {
     InitLCDs();
@@ -180,19 +191,51 @@ public sealed class Program : MyGridProgram {
       return Rotor != null && SetBarrel(Rotor.TopGrid);
     });
 
+    if (Piston != null)
+      TestBarrel = U.EndlessUp().Select(U.CrissCrossPositions).Select(CrissCrossGuns).TakeWhile(guns => guns.Count > 0)
+        .ToList();
+
     return Piston != null;
   }
 
   bool SetBarrel(IMyCubeGrid barrel) {
 
-    Barrel = UpByAxis()
-      .Select(SurroundingPositions)
+    Barrel = U.EndlessUp()
+      .Select(U.CrissCrossPositions)
       .Select(positions =>
         U.Select<IMyUserControllableGun>(barrel, positions).ToDictionary(GunWorkingAngle, gun => gun))
       .TakeWhile(guns => guns.Count > 0)
       .ToList();
 
     return Barrel.Count > 0;
+  }
+
+  List<IMyUserControllableGun> CrissCrossGuns(IEnumerable<Vector3I> positions) {
+    return U.Select<IMyUserControllableGun>(Rotor.TopGrid, positions).OrderBy(GunQuarter).ToList();
+  }
+
+  int GunQuarter(IMyCubeBlock gun) {
+    return RelativeQuarter(Base6Directions.GetForward(RelativeGunOrientation(gun)));
+  }
+
+  Quaternion RelativeGunOrientation(IMyCubeBlock gun) {
+
+    // Orientation of the fire direction of an active gun relative to the main grid.
+    var fire_orientation = Base6Directions.GetOrientation(
+      Base6Directions.Direction.Forward,
+      Base6Directions.Direction.Up
+    );
+
+    Quaternion piston_orientation;
+    Piston.Orientation.GetQuaternion(out piston_orientation);
+
+    Quaternion stator_orientation;
+    Rotor.Orientation.GetQuaternion(out stator_orientation);
+
+    Quaternion gun_orientation;
+    gun.Orientation.GetQuaternion(out gun_orientation);
+
+    return fire_orientation * piston_orientation * stator_orientation * gun_orientation;
   }
 
   void InitGunSystem() {
@@ -218,38 +261,151 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisplayInitError() {
-		LCD.ClearImagesFromSelection();
-    LCD.AddImageToSelection("Cross");
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection("Cross");
+    DisplayImage(LCD, "Cross");
+    DisplayImage(KeyLCD, "Cross");
   }
 
   void DisplayStatus() {
+    var status_image = GunReady(Gun) ? "Arrow" : "Danger";
+		DisplayImage(KeyLCD, status_image);
+    if (InDebug) DisplayDebugInfo(LCD);
+    else DisplayImage(LCD, status_image);
+  }
 
-    var gun_ready = GunReady(Gun) && Gun.Enabled;
+  void DisplayImage(IMyTextSurface lcd, string image) {
+    lcd.WriteText("");
+		lcd.ClearImagesFromSelection();
+    lcd.AddImageToSelection(image);
+  }
+
+  void DisplayDebugInfo(IMyTextSurface lcd) {
 
     string state;
-    if (gun_ready) state = "Gun Ready";
-    else if (!PistonInPosition) state = "Sliding ...";
-    else if (!RotorInPosition) state = "Rotating ...";
-    else if (!RotorStopped) state = "Braking ...";
-    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun ...";
-    else state = "Unknown state";
+    if (GunReady(Gun)) state = "Ready";
+    else if (!PistonInPosition) state = "Sliding";
+    else if (!RotorInPosition) state = "Rotating";
+    else if (!RotorStopped) state = "Braking";
+    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun";
+    else state = "Unknown State";
 
-    var rotor_angle_abs = MathHelper.RoundToInt(MathHelper.ToDegrees(Rotor.Angle));
-    var rotor_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle));
-    var target_angle = Math.Round(Rotor.UpperLimitDeg);
-    var locked = Rotor.RotorLock ? "Locked" : "";
+    var current_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle)).ToString();
+    var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
+    var angle_info = current_angle + (Rotor.RotorLock ? "" : "/" + desired_angle) + "°";
+
+    var level_info = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
+      CurrentBarrelLevel.ToString();
+
+    // TODO: show missed guns on the barrel
+    var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
 
     LCD.WriteText(
-      state+"\n"+
-      "Barrel Level: "+CurrentBarrelLevel+"\n"+
-      "Angle: "+rotor_angle_abs+" ("+rotor_angle+")"+"° / "+target_angle+"° "+locked
+      state+" "+angle_info+" "+level_info+"\n\n"+
+      diagram
     );
 
-		KeyLCD.ClearImagesFromSelection();
-    KeyLCD.AddImageToSelection(gun_ready ? "Arrow" : "Danger");
+    lcd.ClearImagesFromSelection();
   }
+
+  //     +
+  //     ^
+  // + +   + +
+  //     +
+  //     +
+  string BarrelDiagramLocked() {
+
+    string diagram = "";
+
+    string left_spacer = new string(' ', 3 * TestBarrel.Count - 1);
+
+    GunsInDirection(Base6Directions.Direction.Forward).Reverse().ToList()
+      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
+
+    GunsInDirection(Base6Directions.Direction.Left).ToList()
+      .ForEach(gun => diagram += GunChar(gun) + " ");
+
+    diagram += " ";
+
+    GunsInDirection(Base6Directions.Direction.Right).ToList()
+      .ForEach(gun => diagram += GunChar(gun) + " ");
+
+    diagram += "\n";
+
+    GunsInDirection(Base6Directions.Direction.Backward).ToList()
+      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
+
+    return diagram;
+  }
+
+  // +      +
+  //   +  +
+  //   +  +
+  // +      +
+  string BarrelDiagramRotation() {
+
+    string diagram = "";
+
+    foreach (var level in BarrelLevels.Reverse()) {
+      var guns = TestBarrel[level];
+      var left_gun = guns[Quarter(Base6Directions.Direction.Left)];
+      var forward_gun = guns[Quarter(Base6Directions.Direction.Forward)];
+      diagram += LeftSpacer(level) + GunChar(left_gun) + CenterSpacer(level) + GunChar(forward_gun) + "\n";
+    }
+
+    foreach (var level in BarrelLevels) {
+      var guns = TestBarrel[level];
+      var backward_gun = guns[Quarter(Base6Directions.Direction.Backward)];
+      var right_gun = guns[Quarter(Base6Directions.Direction.Right)];
+      diagram += LeftSpacer(level) + GunChar(backward_gun) + CenterSpacer(level) + GunChar(right_gun) + "\n";
+    }
+
+    return diagram;
+  }
+
+  IEnumerable<int> BarrelLevels { get {
+    return Enumerable.Range(0, TestBarrel.Count);
+  }}
+
+  string LeftSpacer(int barrel_level) {
+    return new string(' ', 2 * (TestBarrel.Count - barrel_level));
+  }
+
+  string CenterSpacer(int barrel_level) {
+    return new string(' ', 4 * barrel_level + 2);
+  }
+
+  // All guns on the `Barrel` pointing in actual `direction`.
+  IEnumerable<IMyUserControllableGun> GunsInDirection(Base6Directions.Direction direction) {
+    return TestBarrel.Select(guns => guns[Quarter(direction)]);
+  }
+
+  // Increases counter-clockwise, because the `Rotor` rotates clockwise.
+  int RelativeQuarter(Base6Directions.Direction direction) {
+    switch (direction) {
+      case Base6Directions.Direction.Forward: return 0;
+      case Base6Directions.Direction.Left: return 1;
+      case Base6Directions.Direction.Backward: return 2;
+      case Base6Directions.Direction.Right: return 3;
+      default: return -1;
+    }
+  }
+
+  int Quarter(Base6Directions.Direction direction) {
+    return (RelativeQuarter(direction) + RotorQuarter) % 4;
+  }
+
+  // There are 4 calibrated angles of the `Rotor` where it locked: 0, 0.5π, π, 1.5π.
+  // They correspond to 4 quarters of a circle: 0 / 0.5π = 0, 0.5π / 0.5π = 1, π / 0.5π = 2, 1.5π / 0.5π = 3.
+  int RotorQuarter { get {
+    return MathHelper.Floor(RotorAngle / MathHelper.PiOver2);
+  }}
+
+  char GunChar(IMyUserControllableGun gun) {
+    return GunReady(gun) ? '^' : (GunAvailable(gun) ? '+' : '-');
+  }
+
+  bool InDebug { get {
+    return Me.ShowOnHUD;
+  }}
 
   bool PistonInPosition { get {
     return Piston.CurrentPosition == (Piston.Velocity < 0 ? Piston.MinLimit : Piston.MaxLimit);
@@ -350,7 +506,7 @@ public sealed class Program : MyGridProgram {
 
     if (Gun == null) Gun = GunPlane[CalibratedAngle(Rotor.Angle)];
 
-    if (GunReady(Gun)) Gun.Enabled = true;
+    if (GunAvailable(Gun)) Gun.Enabled = true;
     else SwitchGun();
   }
 
@@ -366,13 +522,18 @@ public sealed class Program : MyGridProgram {
     Gun = null;
 
     // TODO: search for a closest gun in the entire system
-    var available_angles = GunPlane.Where(i => GunReady(i.Value)).Select(i => i.Key).ToList();
+    var available_angles = GunPlane.Where(i => GunAvailable(i.Value)).Select(i => i.Key).ToList();
     if (available_angles.Count > 0) SetRotorAngle(available_angles);
     else SetNextGunPlane();
   }
 
-  bool GunReady(IMyUserControllableGun gun) {
+  bool GunAvailable(IMyUserControllableGun gun) {
     return gun != null && !gun.IsShooting && gun.IsFunctional;
+  }
+
+  // TODO: change this after debugging
+  bool GunReady(IMyUserControllableGun gun) {
+    return GunAvailable(gun) && gun.Enabled;
   }
 
   void SetRotorAngle(List<int> angles) {
@@ -403,22 +564,7 @@ public sealed class Program : MyGridProgram {
     return CalibratedAngle(flipped_fire_angle);
   }
 
-  IEnumerable<Vector3I> UpByAxis() {
-    // Start from `Zero`.
-    var position = Vector3I.Zero;
-    // Then go `Up` the axis.
-    while (true) yield return position += Vector3I.Up;
-  }
 
-  // Positions surrounding the `center` in 4 `SURROUNDING_DIRECTIONS`.
-  IEnumerable<Vector3I> SurroundingPositions(Vector3I center) {
-    return SURROUNDING_DIRECTIONS.Select(direction => direction + center);
-  }
-
-  // Positions from the `center` in 4 `DIAGONAL_DIRECTIONS`.
-  IEnumerable<Vector3I> DiagonalPositions(Vector3I center) {
-    return DIAGONAL_DIRECTIONS.Select(direction => direction + center);
-  }
 
   #endregion // RapidGun
 }}
