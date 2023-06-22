@@ -33,15 +33,6 @@ public sealed class Program : MyGridProgram {
 
   static class U { // Utility
 
-    public static List<IMyBlockGroup> SelectGroups(
-      IMyGridTerminalSystem grid,
-      Func<IMyBlockGroup, bool> filter = null
-    ) {
-      var groups = new List<IMyBlockGroup>();
-      grid.GetBlockGroups(groups, filter);
-      return groups;
-    }
-
     public static IEnumerable<T> Select<T>(
       IMyGridTerminalSystem grid,
       Func<IMyTerminalBlock, bool> filter = null
@@ -49,12 +40,6 @@ public sealed class Program : MyGridProgram {
       var blocks = new List<IMyTerminalBlock>();
       grid.GetBlocksOfType<T>(blocks, filter);
       return blocks.Cast<T>();
-    }
-
-    public static List<T> Select<T>(IMyBlockGroup group, Func<T, bool> filter = null) where T : class {
-      var blocks = new List<T>();
-      group.GetBlocksOfType<T>(blocks, filter);
-      return blocks;
     }
 
     public static IEnumerable<T> Select<T>(IMyCubeGrid grid, IEnumerable<Vector3I> positions) where T : class {
@@ -105,16 +90,6 @@ public sealed class Program : MyGridProgram {
         Vector3I.Right + center,
         Vector3I.Backward + center,
         Vector3I.Left + center
-      });
-    }
-
-    // Positions from the `center` in 4 diagonal directions.
-    public static ImmutableList<Vector3I> DiagonalPositions(Vector3I center) {
-      return ImmutableList.Create(new Vector3I[] {
-        Vector3I.Forward + Vector3I.Left + center,
-        Vector3I.Forward + Vector3I.Right + center,
-        Vector3I.Backward + Vector3I.Left + center,
-        Vector3I.Backward + Vector3I.Right + center
       });
     }
 
@@ -563,8 +538,6 @@ public sealed class Program : MyGridProgram {
     var flipped_fire_angle = MathHelper.TwoPi - gun_to_fire_angle; // Flip 0.5π and 1.5π
     return CalibratedAngle(flipped_fire_angle);
   }
-
-
 
   #endregion // RapidGun
 }}
