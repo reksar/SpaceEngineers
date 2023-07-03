@@ -28,6 +28,31 @@ public sealed class Program : MyGridProgram {
 
   #region RapidGun
 
+  // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
+  IMyPistonBase Piston;
+
+  // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
+  // `CurrentBarrelLevel`.
+  IMyMotorAdvancedStator Rotor;
+  ITerminalProperty<float> RotorVelocity;
+
+  // `Rotor`s top grid is the gun `Barrel` - the `List` of identical *levels*. Each *level* is radially symmetrical and
+  // has a gun in each of the 4 base directions on the plane. Guns are sorted by its direction (see `FindBarrel`).
+  List<List<IMyUserControllableGun>> Barrel;
+  int CurrentBarrelLevel;
+
+  // Current active gun.
+  IMyUserControllableGun Gun;
+
+  // Will be different for *large* and *small* grids.
+  float BlockSize; // m
+
+  IMyTextSurface LCD, KeyLCD;
+
+  const float MAX_ROTOR_TORQUE = 1000000000; // N*m
+  const int QUARTERS_TOTAL = 4;
+  const int NOWHERE = -1;
+
   static class U { // Utility
 
     public static IEnumerable<T> Select<T>(
@@ -68,31 +93,6 @@ public sealed class Program : MyGridProgram {
       while (true) yield return position += Vector3I.Up;
     }
   }
-
-  // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
-  IMyPistonBase Piston;
-
-  // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
-  // `CurrentBarrelLevel`.
-  IMyMotorAdvancedStator Rotor;
-  ITerminalProperty<float> RotorVelocity;
-
-  // `Rotor`s top grid is the gun `Barrel` - the `List` of identical *levels*. Each *level* is radially symmetrical and
-  // has a gun in each of the 4 base directions on the plane. Guns are sorted by its direction (see `FindBarrel`).
-  List<List<IMyUserControllableGun>> Barrel;
-  int CurrentBarrelLevel;
-
-  // Current active gun.
-  IMyUserControllableGun Gun; 
-
-  // Will be different for *large* and *small* grids.
-  float BlockSize; // m
-
-  IMyTextSurface LCD, KeyLCD;
-
-  const float MAX_ROTOR_TORQUE = 1000000000; // N*m
-  const int QUARTERS_TOTAL = 4;
-  const int MAX_QUARTER = 3;
 
   Program() {
     InitLCDs();
@@ -191,24 +191,41 @@ public sealed class Program : MyGridProgram {
 
     DisableGun();
 
-    var barrel_levels = Enumerable.Range(0, Barrel.Count).OrderBy(level => Math.Abs(level - CurrentBarrelLevel));
+    var position = ClosestGunPosition();
+    var level = position.Item1;
+    var quarter = position.Item2;
 
-    var gun_quarters = Enumerable.Range(0, QUARTERS_TOTAL).OrderBy(gun_quarter => {
-      // Order by quarter offset: Forward (0), Left and Right (1), Backward (2).
-      var offset = Math.Abs(RotorQuarter() - gun_quarter);
-      return offset < MAX_QUARTER ? offset : 1;
-    }).ToArray();
-
-    foreach (var level in barrel_levels) {
-      foreach (var quarter in gun_quarters) {
-        if (GunAvailable(Barrel[level][quarter])) {
-          SetRotorAngle(quarter);
-          SetBarrelLevel(level);
-          break;
-        }
-      }
-      // TODO: break this loop
+    if (NOWHERE < level && NOWHERE < quarter) {
+      SetBarrelLevel(level);
+      SetRotorAngle(quarter);
     }
+  }
+
+  MyTuple<int, int> ClosestGunPosition() {
+
+    // In order by closest gun positions.
+    var quarters = Quarters.OrderBy(QuarterOffset).ToArray();
+    var levels = BarrelLevels.OrderBy(LevelOffset);
+
+    foreach (var level in levels)
+      foreach (var quarter in quarters)
+        if (GunAvailable(Barrel[level][quarter]))
+          return MyTuple.Create(level, quarter);
+
+    return MyTuple.Create(NOWHERE, NOWHERE);
+  }
+
+  int LevelOffset(int level) {
+    return Math.Abs(CurrentBarrelLevel - level);
+  }
+
+  // Make Right and Left quarters same in priority.
+  // Order: Forward (0), Left and Right (1), Backward (2).
+  int QuarterOffset(int quarter) {
+    var right_quarter = RelativeQuarter(Base6Directions.Direction.Right);
+    var left_quarter = RelativeQuarter(Base6Directions.Direction.Left);
+    var quarter_offset = Math.Abs(RotorQuarter() - quarter);
+    return quarter_offset < right_quarter ? quarter_offset : left_quarter;
   }
 
   void DisableGun() {
@@ -236,7 +253,7 @@ public sealed class Program : MyGridProgram {
       case Base6Directions.Direction.Left: return 1;
       case Base6Directions.Direction.Backward: return 2;
       case Base6Directions.Direction.Right: return 3;
-      default: return -1;
+      default: return NOWHERE;
     }
   }
 
@@ -378,6 +395,10 @@ public sealed class Program : MyGridProgram {
     return Enumerable.Range(0, Barrel.Count);
   }}
 
+  IEnumerable<int> Quarters { get {
+    return Enumerable.Range(0, QUARTERS_TOTAL);
+  }}
+
   string LeftSpacer(int barrel_level) {
     return new string(' ', 2 * (Barrel.Count - barrel_level));
   }
@@ -444,12 +465,12 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetRotorAngle(int quarter) {
-    RotorAngle = quarter * MathHelper.PiOver2;
+    RotorAngle = MathHelper.PiOver2 * quarter;
   }
 
   void SetBarrelLevel(int level) {
     CurrentBarrelLevel = level;
-    // NOTE: expects levels are close together! Thus we iterate through the planes with `BlockSize`.
+    // NOTE: expects levels are close together! Thus we iterate with `BlockSize`.
     Piston.MaxLimit = CurrentBarrelLevel * BlockSize; // m
     UpdatePistonVelocity();
   }
