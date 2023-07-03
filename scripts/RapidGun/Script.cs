@@ -146,44 +146,37 @@ public sealed class Program : MyGridProgram {
     CurrentBarrelLevel = 0;
     Gun = null;
 
-    Rotor.Displacement = -0.3f; // m
-    Rotor.TargetVelocityRad = 0;
-    Rotor.Torque = 0;
-    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
-    Rotor.RotorLock = true;
-    RotorAngle = 0;
     RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
+    Rotor.Displacement = -0.3f; // m
+    RotorAngle = 0;
+    StopRotor();
 
     Piston.MinLimit = 0; // m
     Piston.MaxLimit = 0; // m
     BlockSize = Me.CubeGrid.GridSize; // m
-    UpdatePistonVelocity();
+    SetPistonVelocity();
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
   }
 
   void Slide() {
     DisableGun();
-    UpdatePistonVelocity();
+    SetPistonVelocity();
   }
 
   void Rotate() {
     DisableGun();
-    Rotor.TargetVelocityRad = TargetVelocity();
-    Rotor.RotorLock = false;
+    RotateRotor();
   }
 
   void Brake() {
     DisableGun();
-    Rotor.RotorLock = true;
-    Rotor.TargetVelocityRad = 0;
-    Rotor.Torque = 0;
-    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
+    StopRotor();
   }
 
   // NOTE: The `Rotor` is expected to be locked in a calibrated position (see `RotorQuarter`)!
   void PrepareGun() {
-    if (Gun == null) Gun = CurrentGunGroup[ForwardQuarter()];
+    if (Gun == null) Gun = Barrel[CurrentBarrelLevel][ForwardQuarter()];
     if (GunAvailable(Gun)) Gun.Enabled = true; else SwitchGun();
   }
 
@@ -273,15 +266,15 @@ public sealed class Program : MyGridProgram {
     return MathHelper.Floor(RotorAngle / MathHelper.PiOver2);
   }
 
+  // NOTE: the global `Piston` has not been set yet, so we pass it in the `piston` arg.
   Quaternion RelativeGunOrientation(IMyCubeBlock gun, IMyPistonBase piston) {
 
-    // Orientation of the fire direction of an active gun relative to the main grid.
+    // Orientation of the fire direction of an active `Gun` relative to the main grid.
     var fire_orientation = Base6Directions.GetOrientation(
       Base6Directions.Direction.Forward,
       Base6Directions.Direction.Up
     );
 
-    // NOTE: the global `Piston` has not been set yet!
     Quaternion piston_orientation;
     piston.Orientation.GetQuaternion(out piston_orientation);
 
@@ -433,10 +426,6 @@ public sealed class Program : MyGridProgram {
     return Rotor.RotorLock && RotorVelocity.GetValue(Rotor) == 0;
   }}
 
-  List<IMyUserControllableGun> CurrentGunGroup { get {
-    return Barrel[CurrentBarrelLevel];
-  }}
-
   float RotorAngle {
 
     get {
@@ -466,22 +455,36 @@ public sealed class Program : MyGridProgram {
 
   void SetRotorAngle(int quarter) {
     RotorAngle = MathHelper.PiOver2 * quarter;
+    RotateRotor();
   }
 
   void SetBarrelLevel(int level) {
-    CurrentBarrelLevel = level;
     // NOTE: expects levels are close together! Thus we iterate with `BlockSize`.
-    Piston.MaxLimit = CurrentBarrelLevel * BlockSize; // m
-    UpdatePistonVelocity();
+    Piston.MaxLimit = level * BlockSize; // m
+    CurrentBarrelLevel = level;
+    SetPistonVelocity();
   }
 
-  void UpdatePistonVelocity() {
+  void SetPistonVelocity() {
     if (Piston.MinLimit < Piston.MaxLimit) Piston.Velocity = Piston.MaxVelocity;
     else Piston.Velocity = -Piston.MaxVelocity;
   }
 
-  float TargetVelocity() {
-    // TODO: decrease braking due to hinges?
+  void StopRotor() {
+    Rotor.RotorLock = true;
+    Rotor.Torque = 0;
+    Rotor.BrakingTorque = MAX_ROTOR_TORQUE;
+    Rotor.TargetVelocityRad = 0;
+  }
+
+  // TODO: refactoring with `TargetRotorVelocity`
+  void RotateRotor() {
+    Rotor.TargetVelocityRad = TargetRotorVelocity();
+    Rotor.RotorLock = false;
+  }
+
+  float TargetRotorVelocity() {
+    // TODO: decrease braking?
     // TODO: refactoring
 
     var delta = Rotor.UpperLimitRad - RotorAngle;
