@@ -262,7 +262,6 @@ public sealed class Program : MyGridProgram {
   // There are 4 calibrated angles of the `Rotor` where it locked: 0, 0.5π, π, 1.5π.
   // They correspond to 4 quarters of a circle: 0 / 0.5π = 0, 0.5π / 0.5π = 1, π / 0.5π = 2, 1.5π / 0.5π = 3.
   int RotorQuarter() {
-    // TODO: try `Rotor.Angle` instead.
     return MathHelper.Floor(RotorAngle / MathHelper.PiOver2);
   }
 
@@ -459,7 +458,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetBarrelLevel(int level) {
-    // NOTE: expects levels are close together! Thus we iterate with `BlockSize`.
+    // NOTE: expects levels are close together!
     Piston.MaxLimit = level * BlockSize; // m
     CurrentBarrelLevel = level;
     SetPistonVelocity();
@@ -477,28 +476,11 @@ public sealed class Program : MyGridProgram {
     Rotor.TargetVelocityRad = 0;
   }
 
-  // TODO: refactoring with `TargetRotorVelocity`
   void RotateRotor() {
-    Rotor.TargetVelocityRad = TargetRotorVelocity();
+    Rotor.TargetVelocityRad = MathHelper.Pi;
+    Rotor.Torque = MAX_ROTOR_TORQUE;
+    Rotor.BrakingTorque = 0;
     Rotor.RotorLock = false;
-  }
-
-  float TargetRotorVelocity() {
-    // TODO: decrease braking?
-    // TODO: refactoring
-
-    var delta = Rotor.UpperLimitRad - RotorAngle;
-    if (delta < -MathHelper.Pi) delta += MathHelper.TwoPi;
-
-    // NOTE: the `delta` range is [-2π .. 2π] and the sinus here is stretched so:
-    // `sin`(-2π) = -1, `sin`(π) = 1, `sin`(0) = 0; using a divisor 4.
-    var sin = (float)Math.Sin(delta / 4);
-
-    Rotor.Torque = MAX_ROTOR_TORQUE * Math.Abs(sin);
-    Rotor.BrakingTorque = MAX_ROTOR_TORQUE - Rotor.Torque;
-
-    // NOTE: max rotor velocity is ±π rad/s and ±2π is used to increase the period of max `Rotor` velocity.
-    return MathHelper.TwoPi * sin;
   }
 
   #endregion // RapidGun
