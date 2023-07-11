@@ -65,8 +65,7 @@ public sealed class Program : MyGridProgram {
     }
 
     public static IEnumerable<T> Select<T>(IMyCubeGrid grid, IEnumerable<Vector3I> positions) where T : class {
-      return positions
-        .Select(position => grid.GetCubeBlock(position)).OfType<IMySlimBlock>()
+      return positions.Select(grid.GetCubeBlock).OfType<IMySlimBlock>()
         .Select(block => block.FatBlock as T).OfType<T>();
     }
 
@@ -74,22 +73,19 @@ public sealed class Program : MyGridProgram {
     // NOTE: similar function from `MathHelper` do not work!
     public static float Limit2Pi(float radians) {
       var arc = radians % MathHelper.TwoPi;
-      if (arc < 0) arc += MathHelper.TwoPi;
-      return arc;
+      return (arc < 0) ? (arc + MathHelper.TwoPi) : arc;
     }
 
     // Positions surrounding the `center` in 4 base directions.
-    public static ImmutableList<Vector3I> CrissCrossPositions(Vector3I center) {
-      return ImmutableList.Create(new Vector3I[] {
-        Vector3I.Forward + center,
-        Vector3I.Right + center,
-        Vector3I.Backward + center,
-        Vector3I.Left + center
-      });
+    public static IEnumerable<Vector3I> CrissCrossPositions(Vector3I center) {
+      yield return Vector3I.Forward + center;
+      yield return Vector3I.Right + center;
+      yield return Vector3I.Backward + center;
+      yield return Vector3I.Left + center;
     }
 
     public static IEnumerable<Vector3I> EndlessUp() {
-      var position = Vector3I.Zero; // NOTE: Initial value will not be yielded!
+      var position = Vector3I.Zero; // Initial value will not be yielded!
       while (true) yield return position += Vector3I.Up;
     }
   }
@@ -146,9 +142,9 @@ public sealed class Program : MyGridProgram {
     CurrentBarrelLevel = 0;
     Gun = null;
 
-    RotorVelocity = Rotor.GetProperty("Velocity").AsFloat();
+    RotorVelocity = Rotor.GetProperty("Velocity").AsFloat(); // rad/s
     Rotor.Displacement = -0.3f; // m
-    RotorAngle = 0;
+    RotorAngle = 0; // rad
     StopRotor();
 
     Piston.GetProperty("MaxImpulseAxis").AsFloat().SetValue(Piston, 100000); // N
@@ -190,8 +186,8 @@ public sealed class Program : MyGridProgram {
     var quarter = position.Item2;
 
     if (NOWHERE < level && NOWHERE < quarter) {
-      SetBarrelLevel(level);
-      SetRotorAngle(quarter);
+      ChangePistonPosition(level);
+      ChangeRotorPosition(quarter);
     }
   }
 
@@ -223,8 +219,10 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisableGun() {
-    if (Gun != null) Gun.Enabled = false;
-    Gun = null;
+    if (Gun != null) {
+      Gun.Enabled = false;
+      Gun = null;
+    }
   }
 
   IMyMotorAdvancedStator FindRotor(IMyPistonBase piston) {
@@ -427,13 +425,13 @@ public sealed class Program : MyGridProgram {
 
   float RotorAngle {
 
+    // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game properties!
     get {
-      // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game properties!
       return U.Limit2Pi(Rotor.Angle);
     }
 
+    // Try playing with the related property sliders in the game if you don't understand this order.
     set {
-      // Try playing with the related property sliders in the game if you don't understand this order.
       if (value < Rotor.LowerLimitRad) {
         Rotor.LowerLimitRad = value;
         Rotor.UpperLimitRad = value;
@@ -452,12 +450,12 @@ public sealed class Program : MyGridProgram {
     return GunAvailable(gun) && gun.Enabled;
   }
 
-  void SetRotorAngle(int quarter) {
-    RotorAngle = MathHelper.PiOver2 * quarter;
+  void ChangeRotorPosition(int quarter) {
+    RotorAngle = quarter * MathHelper.PiOver2;
     RotateRotor();
   }
 
-  void SetBarrelLevel(int level) {
+  void ChangePistonPosition(int level) {
     // Expects levels are close together!
     Piston.MaxLimit = level * BlockSize; // m
     CurrentBarrelLevel = level;
@@ -480,7 +478,7 @@ public sealed class Program : MyGridProgram {
   // decrease the torque in 85 (an empirical value) times to stabilize the rotation in the negative direction.
   void RotateRotor() {
     var reverse = 0 < Rotor.UpperLimitRad && Rotor.UpperLimitRad < RotorAngle;
-    Rotor.Torque = reverse ? -MAX_ROTOR_TORQUE / 85 : MAX_ROTOR_TORQUE;
+    Rotor.Torque = reverse ? MAX_ROTOR_TORQUE / -85 : MAX_ROTOR_TORQUE;
     Rotor.BrakingTorque = 0;
     Rotor.TargetVelocityRad = MathHelper.Pi; // max
     Rotor.RotorLock = false;
