@@ -151,6 +151,7 @@ public sealed class Program : MyGridProgram {
     RotorAngle = 0;
     StopRotor();
 
+    Piston.GetProperty("MaxImpulseAxis").AsFloat().SetValue(Piston, 100000); // N
     Piston.MinLimit = 0; // m
     Piston.MaxLimit = 0; // m
     BlockSize = Me.CubeGrid.GridSize; // m
