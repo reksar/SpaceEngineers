@@ -174,7 +174,7 @@ public sealed class Program : MyGridProgram {
     StopRotor();
   }
 
-  // NOTE: The `Rotor` is expected to be locked in a calibrated position (see `RotorQuarter`)!
+  // The `Rotor` is expected to be locked in a calibrated position (see `RotorQuarter`)!
   void PrepareGun() {
     if (Gun == null) Gun = Barrel[CurrentBarrelLevel][ForwardQuarter()];
     if (GunAvailable(Gun)) Gun.Enabled = true; else SwitchGun();
@@ -265,7 +265,7 @@ public sealed class Program : MyGridProgram {
     return MathHelper.Floor(RotorAngle / MathHelper.PiOver2);
   }
 
-  // NOTE: the global `Piston` has not been set yet, so we pass it in the `piston` arg.
+  // The global `Piston` has not been set yet, so pass it in the `piston` arg.
   Quaternion RelativeGunOrientation(IMyCubeBlock gun, IMyPistonBase piston) {
 
     // Orientation of the fire direction of an active `Gun` relative to the main grid.
@@ -421,14 +421,13 @@ public sealed class Program : MyGridProgram {
   }}
 
   bool RotorStopped { get {
-    // NOTE: there is no another way to get the current `Rotor` velocity.
     return Rotor.RotorLock && RotorVelocity.GetValue(Rotor) == 0;
   }}
 
   float RotorAngle {
 
     get {
-      // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game rotor properties!
+      // `Rotor.Angle` can exceed 2π several times, but this is not visible in the in-game properties!
       return U.Limit2Pi(Rotor.Angle);
     }
 
@@ -458,7 +457,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetBarrelLevel(int level) {
-    // NOTE: expects levels are close together!
+    // Expects levels are close together!
     Piston.MaxLimit = level * BlockSize; // m
     CurrentBarrelLevel = level;
     SetPistonVelocity();
@@ -476,10 +475,13 @@ public sealed class Program : MyGridProgram {
     Rotor.TargetVelocityRad = 0;
   }
 
+  // The direction of rotation depends on the `Rotor.Torque` sign! The velocity sign is always positive. We need to
+  // decrease the torque in 85 (an empirical value) times to stabilize the rotation in the negative direction.
   void RotateRotor() {
-    Rotor.TargetVelocityRad = MathHelper.Pi;
-    Rotor.Torque = MAX_ROTOR_TORQUE;
+    var reverse = 0 < Rotor.UpperLimitRad && Rotor.UpperLimitRad < RotorAngle;
+    Rotor.Torque = reverse ? -MAX_ROTOR_TORQUE / 85 : MAX_ROTOR_TORQUE;
     Rotor.BrakingTorque = 0;
+    Rotor.TargetVelocityRad = MathHelper.Pi; // max
     Rotor.RotorLock = false;
   }
 
