@@ -317,8 +317,11 @@ public sealed class Program : MyGridProgram {
     var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
     var angle = current_angle + (Rotor.RotorLock ? "" : "/" + desired_angle) + "°";
 
-    var level = (PistonInPosition ? "" : (Piston.Velocity < 0 ? "falls" : "rises") + " to ") + "level " +
-      CurrentBarrelLevel.ToString();
+    var level = "level " + (
+      Piston.MaxLimit - Piston.CurrentPosition == 0
+        ? ""
+        : MathHelper.Floor(Piston.CurrentPosition / BlockSize).ToString() + "/"
+    ) + CurrentBarrelLevel.ToString();
 
     // TODO: show missed guns on the barrel
     var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
