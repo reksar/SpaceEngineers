@@ -477,7 +477,8 @@ public sealed class Program : MyGridProgram {
   // The direction of rotation depends on the `Rotor.Torque` sign! The velocity sign is always positive. We need to
   // decrease the torque in 85 (an empirical value) times to stabilize the rotation in the negative direction.
   void RotateRotor() {
-    var reverse = 0 < Rotor.UpperLimitRad && Rotor.UpperLimitRad < RotorAngle;
+    var rotate_radians = Rotor.UpperLimitRad - RotorAngle;
+    var reverse = (-MathHelper.Pi < rotate_radians && rotate_radians < 0) || MathHelper.Pi < rotate_radians;
     Rotor.Torque = reverse ? MAX_ROTOR_TORQUE / -85 : MAX_ROTOR_TORQUE;
     Rotor.BrakingTorque = 0;
     Rotor.TargetVelocityRad = MathHelper.Pi; // max
