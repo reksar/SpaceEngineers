@@ -317,11 +317,9 @@ public sealed class Program : MyGridProgram {
     var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
     var angle = current_angle + (Rotor.RotorLock ? "" : "/" + desired_angle) + "°";
 
-    var level = "level " + (
-      Piston.MaxLimit - Piston.CurrentPosition == 0
-        ? ""
-        : MathHelper.Floor(Piston.CurrentPosition / BlockSize).ToString() + "/"
-    ) + CurrentBarrelLevel.ToString();
+    var level = "level " +
+      (PistonInPosition ? "" : MathHelper.Floor(Piston.CurrentPosition / BlockSize).ToString() + "/") +
+      CurrentBarrelLevel.ToString();
 
     // TODO: show missed guns on the barrel
     var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
@@ -415,7 +413,11 @@ public sealed class Program : MyGridProgram {
   }}
 
   bool PistonInPosition { get {
-    return Piston.CurrentPosition == (Piston.Velocity < 0 ? Piston.MinLimit : Piston.MaxLimit);
+    return PistonDisposition == 0;
+  }}
+
+  float PistonDisposition { get {
+    return Piston.MaxLimit - Piston.CurrentPosition;
   }}
 
   bool RotorInPosition { get {
@@ -466,8 +468,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void SetPistonVelocity() {
-    if (Piston.MinLimit < Piston.MaxLimit) Piston.Velocity = Piston.MaxVelocity;
-    else Piston.Velocity = -Piston.MaxVelocity;
+    Piston.Velocity = PistonDisposition < 0 ? -Piston.MaxVelocity : Piston.MaxVelocity;
   }
 
   void StopRotor() {
