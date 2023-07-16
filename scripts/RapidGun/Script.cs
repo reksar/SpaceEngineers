@@ -98,19 +98,22 @@ public sealed class Program : MyGridProgram {
   // Will run with the `UpdateFrequency` set at the end of `InitGunSystem`. Or won't run on init fail.
   void Main(string argument, UpdateType updateSource) {
 
-    // TODO: slide and rotate at the same time.
-    // Mind the order!
-    if (!PistonInPosition) Slide();
-    else if (!RotorInPosition) Rotate();
-    else if (!RotorStopped) Brake();
-    else PrepareGun();
+    var need_to_slide = !PistonInPosition;
+    var need_to_rotate = !RotorInPosition;
+
+    if (need_to_slide) Slide();
+    if (need_to_rotate) Rotate();
+
+    if (!(need_to_slide || need_to_rotate)) {
+      if (RotorStopped) PrepareGun(); else Brake();
+    }
 
     DisplayStatus();
   }
 
   void InitLCDs() {
-		LCD = Me.GetSurface(0);
-		KeyLCD = Me.GetSurface(1);
+    LCD = Me.GetSurface(0);
+    KeyLCD = Me.GetSurface(1);
     InitLCD(LCD);
     InitLCD(KeyLCD);
   }
@@ -292,14 +295,14 @@ public sealed class Program : MyGridProgram {
 
   void DisplayStatus() {
     var status_image = GunReady(Gun) ? "Arrow" : "Danger";
-		DisplayImage(KeyLCD, status_image);
+    DisplayImage(KeyLCD, status_image);
     if (InDebug) DisplayDebugInfo(LCD);
     else DisplayImage(LCD, status_image);
   }
 
   void DisplayImage(IMyTextSurface lcd, string image) {
     lcd.WriteText("");
-		lcd.ClearImagesFromSelection();
+    lcd.ClearImagesFromSelection();
     lcd.AddImageToSelection(image);
   }
 
