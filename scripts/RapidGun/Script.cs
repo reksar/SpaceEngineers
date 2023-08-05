@@ -252,10 +252,6 @@ public sealed class Program : MyGridProgram {
     }
   }
 
-  int Quarter(Base6Directions.Direction direction) {
-    return (RelativeQuarter(direction) + RotorQuarter()) % QUARTERS_TOTAL;
-  }
-
   // Faster alternative for `Quarter(Base6Directions.Direction.Forward)`.
   int ForwardQuarter() {
     return RotorQuarter() % QUARTERS_TOTAL;
@@ -296,8 +292,7 @@ public sealed class Program : MyGridProgram {
   void DisplayStatus() {
     var status_image = GunReady(Gun) ? "Arrow" : "Danger";
     DisplayImage(KeyLCD, status_image);
-    if (InDebug) DisplayDebugInfo(LCD);
-    else DisplayImage(LCD, status_image);
+    DisplayImage(LCD, status_image);
   }
 
   void DisplayImage(IMyTextSurface lcd, string image) {
@@ -306,113 +301,12 @@ public sealed class Program : MyGridProgram {
     lcd.AddImageToSelection(image);
   }
 
-  void DisplayDebugInfo(IMyTextSurface lcd) {
-
-    string state;
-    if (GunReady(Gun)) state = "Ready";
-    else if (!PistonInPosition) state = "Sliding";
-    else if (!RotorInPosition) state = "Rotating";
-    else if (!RotorStopped) state = "Braking";
-    else if (Gun == null || Gun.IsShooting) state = "Selecting Gun";
-    else state = "Unknown State";
-
-    var current_angle = MathHelper.RoundToInt(MathHelper.ToDegrees(RotorAngle)).ToString();
-    var desired_angle = MathHelper.RoundToInt(Rotor.UpperLimitDeg).ToString();
-    var angle = current_angle + (Rotor.RotorLock ? "" : "/" + desired_angle) + "°";
-
-    var level = "level " +
-      (PistonInPosition ? "" : MathHelper.Floor(Piston.CurrentPosition / BlockSize).ToString() + "/") +
-      CurrentBarrelLevel.ToString();
-
-    // TODO: show missed guns on the barrel
-    var diagram = Rotor.RotorLock ? BarrelDiagramLocked() : BarrelDiagramRotation();
-
-    lcd.ClearImagesFromSelection();
-    lcd.WriteText(state+" "+angle+" "+level+"\n\n" + diagram);
-  }
-
-  //     +
-  //     ^
-  // + +   + +
-  //     +
-  //     +
-  string BarrelDiagramLocked() {
-
-    string diagram = "";
-
-    string left_spacer = new string(' ', 3 * Barrel.Count - 1);
-
-    GunsInDirection(Base6Directions.Direction.Forward).Reverse().ToList()
-      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
-
-    GunsInDirection(Base6Directions.Direction.Left).ToList()
-      .ForEach(gun => diagram += GunChar(gun) + " ");
-
-    diagram += " ";
-
-    GunsInDirection(Base6Directions.Direction.Right).ToList()
-      .ForEach(gun => diagram += GunChar(gun) + " ");
-
-    diagram += "\n";
-
-    GunsInDirection(Base6Directions.Direction.Backward).ToList()
-      .ForEach(gun => diagram += left_spacer + GunChar(gun) + "\n");
-
-    return diagram;
-  }
-
-  // +      +
-  //   +  +
-  //   +  +
-  // +      +
-  string BarrelDiagramRotation() {
-
-    string diagram = "";
-
-    foreach (var level in BarrelLevels.Reverse()) {
-      var guns = Barrel[level];
-      var left_gun = guns[Quarter(Base6Directions.Direction.Left)];
-      var forward_gun = guns[Quarter(Base6Directions.Direction.Forward)];
-      diagram += LeftSpacer(level) + GunChar(left_gun) + CenterSpacer(level) + GunChar(forward_gun) + "\n";
-    }
-
-    foreach (var level in BarrelLevels) {
-      var guns = Barrel[level];
-      var backward_gun = guns[Quarter(Base6Directions.Direction.Backward)];
-      var right_gun = guns[Quarter(Base6Directions.Direction.Right)];
-      diagram += LeftSpacer(level) + GunChar(backward_gun) + CenterSpacer(level) + GunChar(right_gun) + "\n";
-    }
-
-    return diagram;
-  }
-
   IEnumerable<int> BarrelLevels { get {
     return Enumerable.Range(0, Barrel.Count);
   }}
 
   IEnumerable<int> Quarters { get {
     return Enumerable.Range(0, QUARTERS_TOTAL);
-  }}
-
-  string LeftSpacer(int barrel_level) {
-    return new string(' ', 2 * (Barrel.Count - barrel_level));
-  }
-
-  string CenterSpacer(int barrel_level) {
-    return new string(' ', 4 * barrel_level + 2);
-  }
-
-  // All guns on the `Barrel` pointing in actual `direction`.
-  IEnumerable<IMyUserControllableGun> GunsInDirection(Base6Directions.Direction direction) {
-    return Barrel.Select(guns => guns[Quarter(direction)]);
-  }
-
-  char GunChar(IMyUserControllableGun gun) {
-    return GunReady(gun) ? '^' : (GunAvailable(gun) ? '+' : '-');
-  }
-
-  bool InDebug { get {
-    return Me.ShowOnHUD;
   }}
 
   bool PistonInPosition { get {
