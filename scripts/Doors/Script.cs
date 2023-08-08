@@ -60,7 +60,6 @@ const string NO_AIRLOCK = "!NoAirlock";
 
 // NOTE: still 99 iterations, even after decreasing the update frequency by x10.
 const int REFRESH_RATE = 99; // iterations
-
 int IterationCount = 0;
 int ManagedDoorsCount = 0;
 int BrokenDoorsCount = 0;
@@ -71,19 +70,11 @@ Dictionary<IMyDoor, IMyDoor> Airlocks = new Dictionary<IMyDoor, IMyDoor>();
 Dictionary<IMyDoor, DateTime> OpenAirlocks = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, int> OpenAirlocksPhase = new Dictionary<IMyDoor, int>();
 
-StringBuilder Status = new StringBuilder();
-
-// To show the `Status`.
 IMyTextSurface LCD;
 
 public Program() {
-
+  InitLCD();
   Runtime.UpdateFrequency = UpdateFrequency.Update100;
-
-  LCD = Me.GetSurface(0);
-  LCD.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-  LCD.FontColor = Color.White;
-  LCD.BackgroundColor = Color.Black;
 }
 
 public void Main() {
@@ -95,7 +86,8 @@ public void Main() {
   ManageDoors();
   Time += Runtime.TimeSinceLastRun;
   if (REFRESH_RATE <= ++IterationCount) IterationCount = 0;
-  ShowStatus();
+
+  DisplayStatus();
 }
 
 void UpdateDoors() {
@@ -192,18 +184,23 @@ void ManageDoors() {
   });
 }
 
-void ShowStatus() {
+void InitLCD() {
+  LCD = Me.GetSurface(0);
+  LCD.ContentType = ContentType.TEXT_AND_IMAGE;
+  LCD.FontColor = Color.White;
+  LCD.BackgroundColor = Color.Black;
+  LCD.WriteText("");
+  LCD.ClearImagesFromSelection();
+}
 
-  Status.Clear();
-
-  Status.Append("Managed doors: "+ManagedDoorsCount);
-  if (0 < BrokenDoorsCount) Status.Append("("+BrokenDoorsCount+" broken)");
-  Status.Append("\n");
-
-  Status.Append("Airlocks: "+(Airlocks.Count / 2)+"\n");
-
-  LCD.WriteText(Status);
-  Echo(Status.ToString());
+void DisplayStatus() {
+  var broken_doors = 0 < BrokenDoorsCount ? "("+BrokenDoorsCount+" broken)" : "";
+  var all_doors = "All managed doors: " + ManagedDoorsCount + " " + broken_doors + "\n";
+  var single_doors = "Single doors: " + (ManagedDoorsCount - Airlocks.Count) + "\n";
+  var airlocks = "Airlocks: " + (Airlocks.Count / 2) + "\n";
+  var status = all_doors + single_doors + airlocks;
+  LCD.WriteText(status);
+  Echo(status);
 }
 
 #endregion // Doors

@@ -69,6 +69,14 @@ public sealed class Program : MyGridProgram {
         .Select(block => block.FatBlock as T).OfType<T>();
     }
 
+    public static void InitLCD(IMyTextSurface lcd) {
+      lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+      lcd.FontColor = Color.White;
+      lcd.BackgroundColor = Color.Black;
+      lcd.WriteText("");
+      lcd.ClearImagesFromSelection();
+    }
+
     // Returns radians in the range [0 .. 2π].
     // NOTE: similar function from `MathHelper` do not work!
     public static float Limit2Pi(float radians) {
@@ -114,15 +122,8 @@ public sealed class Program : MyGridProgram {
   void InitLCDs() {
     LCD = Me.GetSurface(0);
     KeyLCD = Me.GetSurface(1);
-    InitLCD(LCD);
-    InitLCD(KeyLCD);
-  }
-
-  void InitLCD(IMyTextSurface lcd) {
-		lcd.ContentType = ContentType.TEXT_AND_IMAGE;
-    lcd.BackgroundColor = Color.Black;
-    lcd.WriteText("");
-		lcd.ClearImagesFromSelection();
+    U.InitLCD(LCD);
+    U.InitLCD(KeyLCD);
   }
 
   bool SetGunSystem() {
