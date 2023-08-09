@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text;
 using System.Collections.Generic;
 
 // Space Engineers DLLs
@@ -15,6 +14,7 @@ using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ObjectBuilders.Definitions;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI;
 
 namespace Doors {
 public sealed class Program : MyGridProgram {
@@ -58,13 +58,12 @@ const string NO_AIRLOCK = "no-airlock";
 // Update doors every `ITERATIONS_BEFORE_UPDATE` calls to `Main`.
 // NOTE: Ticks to update is `UpdateFrequency * ITERATIONS_BEFORE_UPDATE`.
 // NOTE: There are 60 ticks per second.
-const int ITERATIONS_BEFORE_UPDATE = 100;
+const int ITERATIONS_BEFORE_UPDATE = 100; // `Main` calls
 
 int Iterations = 0; // `Main` calls
-int ManagedDoorsCount = 0;
-int BrokenDoorsCount = 0;
+int DoorsCount = 0;
 DateTime Time = new DateTime();
-List<IMyDoor> ManagedDoors = new List<IMyDoor>();
+List<IMyDoor> Doors = new List<IMyDoor>();
 Dictionary<IMyDoor, DateTime> OpenDoors = new Dictionary<IMyDoor, DateTime>();
 Dictionary<IMyDoor, IMyDoor> Airlocks = new Dictionary<IMyDoor, IMyDoor>();
 Dictionary<IMyDoor, DateTime> OpenAirlocks = new Dictionary<IMyDoor, DateTime>();
@@ -73,8 +72,8 @@ Dictionary<IMyDoor, int> OpenAirlocksPhase = new Dictionary<IMyDoor, int>();
 IMyTextSurface LCD;
 
 Program() {
-  // TODO: Close all managed doors on init.
   InitLCD();
+  CloseManagedDoors();
   Runtime.UpdateFrequency = UpdateFrequency.Update100;
 }
 
@@ -94,32 +93,20 @@ void Main() {
 }
 
 void UpdateDoors() {
-  BrokenDoorsCount = 0;
-  GridTerminalSystem.GetBlocksOfType(ManagedDoors, SelectDoor);
-  if (ManagedDoors.Count != ManagedDoorsCount) {
-    ManagedDoorsCount = ManagedDoors.Count;
+  GridTerminalSystem.GetBlocksOfType(Doors, NeedToManage);
+  if (Doors.Count != DoorsCount) {
+    DoorsCount = Doors.Count;
     OpenDoors.Clear();
     Airlocks.Clear();
     OpenAirlocksPhase.Clear();
   }
 }
 
-bool SelectDoor (IMyDoor door) {
-  if (!door.IsSameConstructAs(Me)) return false;
-  if (door.CustomData.Contains(MANUAL_DOOR)) return false;
-  if (!MANAGE_HANGARS && door is IMyAirtightHangarDoor) return false;
-  if (!door.IsFunctional) {
-    BrokenDoorsCount++;
-    return false;
-  }
-  return true;
-}
-
 void UpdateAirlocks() {
   float distance;
   float min_distance;
   int closest_door_idx;
-  var doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor || door.CustomData.Contains(NO_AIRLOCK)));
+  var doors = Doors.FindAll(door => !(door is IMyAirtightHangarDoor || door.CustomData.Contains(NO_AIRLOCK)));
   Airlocks.Clear();
   foreach (var door in doors) {
     min_distance = float.MaxValue;
@@ -143,15 +130,9 @@ void ManageAirlocks() {
   foreach (var door_pair in Airlocks) {
     var door = door_pair.Key;
     var sibling = door_pair.Value;
-    var need_to_close = OpenAirlocks.ContainsKey(door) ? (Time - OpenAirlocks[door]).TotalMilliseconds >= AIRLOCK_DELAY : true;
+    var need_to_close = !OpenAirlocks.ContainsKey(door) || AIRLOCK_DELAY <= (Time - OpenAirlocks[door]).TotalMilliseconds;
     var phase = OpenAirlocksPhase.ContainsKey(door) ? OpenAirlocksPhase[door] : 0;
-    if (PROTECT_AIRLOCK) {
-      if (door.Status != DoorStatus.Closed || !need_to_close || phase == 1) {
-        sibling.Enabled = false;
-      } else {
-        sibling.Enabled = true;
-      }
-    }
+    sibling.Enabled = !PROTECT_AIRLOCK || (door.Status == DoorStatus.Closed && phase != 1);
     if (OpenAirlocksPhase.ContainsKey(sibling)) continue;
     if (door.Status == DoorStatus.Open) OpenAirlocksPhase[door] = 1;
     if (OpenAirlocksPhase.ContainsKey(door)) {
@@ -173,7 +154,7 @@ void ManageAirlocks() {
 }
 
 void ManageDoors() {
-  ManagedDoors.FindAll(door => door.Status == DoorStatus.Open).ForEach(door => {
+  Doors.FindAll(door => door.Status == DoorStatus.Open).ForEach(door => {
     if (!OpenDoors.ContainsKey(door)) {
       OpenDoors[door] = door is IMyAdvancedDoor ? Time + TimeSpan.FromSeconds(1) : Time;
     } else {
@@ -187,6 +168,14 @@ void ManageDoors() {
   });
 }
 
+void CloseManagedDoors() {
+  GridTerminalSystem.GetBlocksOfType(Doors, NeedToManage);
+  Doors.ForEach(door => {
+    door.Enabled = true;
+    door.CloseDoor();
+  });
+}
+
 void InitLCD() {
   LCD = Me.GetSurface(0);
   LCD.ContentType = ContentType.TEXT_AND_IMAGE;
@@ -197,13 +186,17 @@ void InitLCD() {
 }
 
 void DisplayStatus() {
-  var broken_doors = 0 < BrokenDoorsCount ? "("+BrokenDoorsCount+" broken)" : "";
-  var all_doors = "All managed doors: " + ManagedDoorsCount + " " + broken_doors + "\n";
-  var single_doors = "Single doors: " + (ManagedDoorsCount - Airlocks.Count) + "\n";
+  var all_doors = "All managed doors: " + DoorsCount + "\n";
+  var single_doors = "Single doors: " + (DoorsCount - Airlocks.Count) + "\n";
   var airlocks = "Airlocks: " + (Airlocks.Count / 2) + "\n";
   var status = all_doors + single_doors + airlocks;
   LCD.WriteText(status);
   Echo(status);
+}
+
+bool NeedToManage(IMyDoor door) {
+  return door.IsSameConstructAs(Me) && door.IsFunctional &&
+    !(door.CustomData.Contains(MANUAL_DOOR) || (door is IMyAirtightHangarDoor && !MANAGE_HANGARS));
 }
 
 #endregion // Doors
