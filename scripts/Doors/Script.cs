@@ -29,9 +29,8 @@ const double DOOR_DELAY = 1000; // ms
 const bool MANAGE_HANGARS = true;
 const double HANGAR_DELAY = 10000; // ms
 
-// If you don't want to auto close specific doors, add the manual door keyword to their names
-// Note: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
-const string MANUAL_DOOR = "!Manual";
+// If you don't want to auto close specific doors, add this keyword to their `CustomData`.
+const string MANUAL_DOOR = "manual";
 
 
 // --- Simple Airlock ---
@@ -53,14 +52,15 @@ const bool PROTECT_AIRLOCK = true;
 const double AIRLOCK_DELAY = 0; // ms
 
 // If two nearby doors are accidentally treated as an airlock but are in fact just regular doors, you can add this
-// keyword to one or both door's names to disable airlock functionality (autoclose still works).
-// NOTE: blockname changes are only noticed every ~17 seconds, so it takes some time until your door is really excluded!
-const string NO_AIRLOCK = "!NoAirlock";
+// keyword to one or both door's `CustomData` to disable airlock functionality (autoclose still works).
+const string NO_AIRLOCK = "no-airlock";
 
+// Update doors every `ITERATIONS_BEFORE_UPDATE` calls to `Main`.
+// NOTE: Ticks to update is `UpdateFrequency * ITERATIONS_BEFORE_UPDATE`.
+// NOTE: There are 60 ticks per second.
+const int ITERATIONS_BEFORE_UPDATE = 100;
 
-// NOTE: still 99 iterations, even after decreasing the update frequency by x10.
-const int REFRESH_RATE = 99; // iterations
-int IterationCount = 0;
+int Iterations = 0; // `Main` calls
 int ManagedDoorsCount = 0;
 int BrokenDoorsCount = 0;
 DateTime Time = new DateTime();
@@ -72,20 +72,23 @@ Dictionary<IMyDoor, int> OpenAirlocksPhase = new Dictionary<IMyDoor, int>();
 
 IMyTextSurface LCD;
 
-public Program() {
+Program() {
+  // TODO: Close all managed doors on init.
   InitLCD();
   Runtime.UpdateFrequency = UpdateFrequency.Update100;
 }
 
-public void Main() {
-  if (IterationCount == 0) UpdateDoors();
+void Main() {
+  if (Iterations == 0) UpdateDoors();
   if (MANAGE_AIRLOCKS) {
-    if (IterationCount == 0) UpdateAirlocks();
+    if (Iterations == 0) UpdateAirlocks();
     ManageAirlocks();
   }
   ManageDoors();
+
+  if (ITERATIONS_BEFORE_UPDATE <= ++Iterations) Iterations = 0;
+
   Time += Runtime.TimeSinceLastRun;
-  if (REFRESH_RATE <= ++IterationCount) IterationCount = 0;
 
   DisplayStatus();
 }
@@ -103,7 +106,7 @@ void UpdateDoors() {
 
 bool SelectDoor (IMyDoor door) {
   if (!door.IsSameConstructAs(Me)) return false;
-  if (door.CustomName.Contains(MANUAL_DOOR)) return false;
+  if (door.CustomData.Contains(MANUAL_DOOR)) return false;
   if (!MANAGE_HANGARS && door is IMyAirtightHangarDoor) return false;
   if (!door.IsFunctional) {
     BrokenDoorsCount++;
@@ -116,7 +119,7 @@ void UpdateAirlocks() {
   float distance;
   float min_distance;
   int closest_door_idx;
-  var doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor || door.CustomName.Contains(NO_AIRLOCK)));
+  var doors = ManagedDoors.FindAll(door => !(door is IMyAirtightHangarDoor || door.CustomData.Contains(NO_AIRLOCK)));
   Airlocks.Clear();
   foreach (var door in doors) {
     min_distance = float.MaxValue;
