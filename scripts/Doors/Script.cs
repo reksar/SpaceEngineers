@@ -78,6 +78,8 @@ Program() {
 }
 
 void Main() {
+
+  // Order can be important!
   if (Iterations == 0) UpdateDoors();
   if (MANAGE_AIRLOCKS) {
     if (Iterations == 0) UpdateAirlocks();
@@ -85,11 +87,10 @@ void Main() {
   }
   ManageDoors();
 
+  if (Iterations == 0) DisplayStatus();
+
   if (ITERATIONS_BEFORE_UPDATE <= ++Iterations) Iterations = 0;
-
   Time += Runtime.TimeSinceLastRun;
-
-  DisplayStatus();
 }
 
 void UpdateDoors() {
