@@ -34,12 +34,12 @@ public sealed class Program : MyGridProgram {
   // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
   // `CurrentBarrelLevel`.
   IMyMotorAdvancedStator Rotor;
-  ITerminalProperty<float> RotorVelocity;
+  ITerminalProperty<float> RotorVelocity; // rad/s
 
   // `Rotor`s top grid is the gun `Barrel` - the `List` of identical *levels*. Each *level* is radially symmetrical and
   // has a gun in each of the 4 base directions on the plane. Guns are sorted by its direction (see `FindBarrel`).
   List<List<IMyUserControllableGun>> Barrel;
-  int CurrentBarrelLevel;
+  int CurrentBarrelLevel; // blocks
 
   // Current active gun.
   IMyUserControllableGun Gun;
@@ -119,10 +119,10 @@ public sealed class Program : MyGridProgram {
   }
 
   void InitLCD(IMyTextSurface lcd) {
-		lcd.ContentType = ContentType.TEXT_AND_IMAGE;
+    lcd.ContentType = ContentType.TEXT_AND_IMAGE;
     lcd.BackgroundColor = Color.Black;
     lcd.WriteText("");
-		lcd.ClearImagesFromSelection();
+    lcd.ClearImagesFromSelection();
   }
 
   bool SetGunSystem() {
@@ -141,9 +141,10 @@ public sealed class Program : MyGridProgram {
 
   void InitGunSystem() {
 
-    Barrel.ForEach(level => level.ForEach(gun => gun.Enabled = false));
-    CurrentBarrelLevel = 0;
     Gun = null;
+
+    Barrel.ForEach(level => level.ForEach(gun => gun.Enabled = false));
+    CurrentBarrelLevel = Barrel.Count - 1; // blocks
 
     RotorVelocity = Rotor.GetProperty("Velocity").AsFloat(); // rad/s
     Rotor.Displacement = -0.3f; // m
@@ -152,8 +153,9 @@ public sealed class Program : MyGridProgram {
 
     Piston.GetProperty("MaxImpulseAxis").AsFloat().SetValue(Piston, 100000); // N
     Piston.MinLimit = 0; // m
-    Piston.MaxLimit = 0; // m
+    // Mind the order!
     BlockSize = Me.CubeGrid.GridSize; // m
+    SetPistonMaxLimit();
     SetPistonVelocity();
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
@@ -185,11 +187,11 @@ public sealed class Program : MyGridProgram {
     DisableGun();
 
     var position = ClosestGunPosition();
-    var level = position.Item1;
+    var barrel_level = position.Item1;
     var quarter = position.Item2;
 
-    if (NOWHERE < level && NOWHERE < quarter) {
-      ChangePistonPosition(level);
+    if (NOWHERE < barrel_level && NOWHERE < quarter) {
+      ChangePistonPosition(barrel_level);
       ChangeRotorPosition(quarter);
     }
   }
@@ -198,7 +200,7 @@ public sealed class Program : MyGridProgram {
 
     // In order by closest gun positions.
     var quarters = Quarters.OrderBy(QuarterOffset).ToArray();
-    var levels = BarrelLevels.OrderBy(LevelOffset);
+    var levels = BarrelLevels.OrderBy(BarrelLevelOffset);
 
     foreach (var level in levels)
       foreach (var quarter in quarters)
@@ -208,7 +210,7 @@ public sealed class Program : MyGridProgram {
     return MyTuple.Create(NOWHERE, NOWHERE);
   }
 
-  int LevelOffset(int level) {
+  int BarrelLevelOffset(int level) {
     return Math.Abs(CurrentBarrelLevel - level);
   }
 
@@ -357,13 +359,21 @@ public sealed class Program : MyGridProgram {
     RotateRotor();
   }
 
-  void ChangePistonPosition(int level) {
-    // Expects levels are close together!
-    Piston.MaxLimit = level * BlockSize; // m
-    CurrentBarrelLevel = level;
+  void ChangePistonPosition(int barrel_level) {
+    // Mind the order!
+    CurrentBarrelLevel = barrel_level; // blocks
+    SetPistonMaxLimit();
     SetPistonVelocity();
   }
 
+  // NOTE: Expects levels are close together!
+  // NOTE: Set `BlockSize` and `CurrentBarrelLevel` first!
+  void SetPistonMaxLimit() {
+    var piston_level = Barrel.Count - CurrentBarrelLevel - 1; // blocks
+    Piston.MaxLimit = piston_level * BlockSize; // m
+  }
+
+  // NOTE: `SetPistonMaxLimit` first!
   void SetPistonVelocity() {
     Piston.Velocity = PistonDisposition < 0 ? -Piston.MaxVelocity : Piston.MaxVelocity;
   }
