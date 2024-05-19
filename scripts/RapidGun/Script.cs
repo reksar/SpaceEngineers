@@ -1,34 +1,50 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 
 // Space Engineers DLLs
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
-using Sandbox.Game.EntityComponents;
 using VRageMath;
 using VRage;
-using VRage.Collections;
-using VRage.Game;
-using VRage.Game.Components;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
-using VRage.Game.ObjectBuilders.Definitions;
-using SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace RapidGun {
 
 public sealed class Program : MyGridProgram {
-
   /*
+   * Weapons such as Artillery, Railgun, Assault Cannon require a long reload time. But it is possible to switch weapons
+   * when only one of them is active, while others are reloading.
+   *
+   * Guns G are placed criss-cross in base 4 directions. Their attachment point is the conveyor block C. 4 criss-cross
+   * guns form a barrel level. One or more stacked barrel levels form a barrel with the rotor R as the base point. The
+   * rotor allows to rotate barrel for switching an active gun within one barrel level. The rotor is placed at the top
+   * of the piston P. Sliding the piston allows to switch an active gun between barrel levels.
+   *
+   * There are 4 criss-cross blast door blocks B the on rotor base. These are not used in the script, but are used for
+   * the barrel stability.
+   *
+   * In addition to Blast Door blocks, on a small grid there are 2 Wheels 2x2 are attached to opposite sides of the
+   * `Piston` Top (using Armor Panels).
+   *
+   * This design can be more compact that just the "revolving" weapon placement.
+   *
+   *     <-G[C]G->  --- barrel level 2
+   *     <-G[C]G->  --- barrel level 1
+   *         ^
+   *    [B]| R |[B]
+   *        | |
+   *        | |
+   *        | |
+   *         P
+   *
    * If the `Program` constructor has successfully initialized the gun system, then the `Main` method will run
    * automatically with the `UpdateFrequency`.
    */
-
   #region RapidGun
 
-  // The pivot of the entire gun system. Sliding the piston will change the `Barrel` level.
+  // The pivot of the entire RapidGun system. Sliding the piston will change the `Barrel` level.
   IMyPistonBase Piston;
 
   // Attached to the `Piston` top and holds the gun `Barrel`. Rotating the `Rotor` will change the `Gun` within the
@@ -41,11 +57,7 @@ public sealed class Program : MyGridProgram {
   List<List<IMyUserControllableGun>> Barrel;
   int CurrentBarrelLevel; // blocks
 
-  // Current active gun.
-  IMyUserControllableGun Gun;
-
-  // Will be different for *large* and *small* grids.
-  float BlockSize; // m
+  IMyUserControllableGun ActiveGun;
 
   IMyTextSurface LCD, KeyLCD;
 
@@ -95,7 +107,7 @@ public sealed class Program : MyGridProgram {
     if (SetGunSystem()) InitGunSystem(); else DisplayInitError();
   }
 
-  // Will run with the `UpdateFrequency` set at the end of `InitGunSystem`. Or won't run on init fail.
+  // Will run with the `UpdateFrequency` set at the end of a successful `InitGunSystem`.
   void Main(string argument, UpdateType updateSource) {
 
     var need_to_slide = !PistonInPosition;
@@ -141,21 +153,23 @@ public sealed class Program : MyGridProgram {
 
   void InitGunSystem() {
 
-    Gun = null;
+    // NOTE: 1x1 cube size is 2.5 m for a large grid and 0.5 m for a small.
+    // NOTE: `Me` is expected to be a Programmable Block of size 1x1.
+    var is_grid_large = Me.CubeGrid.GridSize > 1;
+
+    ActiveGun = null;
 
     Barrel.ForEach(level => level.ForEach(gun => gun.Enabled = false));
     CurrentBarrelLevel = Barrel.Count - 1; // blocks
 
     RotorVelocity = Rotor.GetProperty("Velocity").AsFloat(); // rad/s
-    Rotor.Displacement = -0.3f; // m
+    Rotor.Displacement = is_grid_large ? -0.3f : 0.05f; // m
     RotorAngle = 0; // rad
     StopRotor();
 
     Piston.GetProperty("MaxImpulseAxis").AsFloat().SetValue(Piston, 100000); // N
     Piston.MinLimit = 0; // m
-    // Mind the order!
-    BlockSize = Me.CubeGrid.GridSize; // m
-    SetPistonMaxLimit();
+    SetPistonMaxLimit(CurrentBarrelLevel);
     SetPistonVelocity();
 
     Runtime.UpdateFrequency = UpdateFrequency.Update10;
@@ -178,8 +192,8 @@ public sealed class Program : MyGridProgram {
 
   // The `Rotor` is expected to be locked in a calibrated position (see `RotorQuarter`)!
   void PrepareGun() {
-    if (Gun == null) Gun = Barrel[CurrentBarrelLevel][ForwardQuarter()];
-    if (GunAvailable(Gun)) Gun.Enabled = true; else SwitchGun();
+    if (ActiveGun == null) ActiveGun = Barrel[CurrentBarrelLevel][ForwardQuarter()];
+    if (GunAvailable(ActiveGun)) ActiveGun.Enabled = true; else SwitchGun();
   }
 
   void SwitchGun() {
@@ -224,9 +238,9 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisableGun() {
-    if (Gun != null) {
-      Gun.Enabled = false;
-      Gun = null;
+    if (ActiveGun != null) {
+      ActiveGun.Enabled = false;
+      ActiveGun = null;
     }
   }
 
@@ -292,7 +306,7 @@ public sealed class Program : MyGridProgram {
   }
 
   void DisplayStatus() {
-    var status_image = GunReady(Gun) ? "Arrow" : "Danger";
+    var status_image = GunReady(ActiveGun) ? "Arrow" : "Danger";
     DisplayImage(KeyLCD, status_image);
     DisplayImage(LCD, status_image);
   }
@@ -362,15 +376,15 @@ public sealed class Program : MyGridProgram {
   void ChangePistonPosition(int barrel_level) {
     // Mind the order!
     CurrentBarrelLevel = barrel_level; // blocks
-    SetPistonMaxLimit();
+    SetPistonMaxLimit(CurrentBarrelLevel);
     SetPistonVelocity();
   }
 
   // NOTE: Expects levels are close together!
-  // NOTE: Set `BlockSize` and `CurrentBarrelLevel` first!
-  void SetPistonMaxLimit() {
-    var piston_level = Barrel.Count - CurrentBarrelLevel - 1; // blocks
-    Piston.MaxLimit = piston_level * BlockSize; // m
+  // NOTE: The `Piston.MaxLimit` can be changed time to time and can be 0!
+  void SetPistonMaxLimit(int current_barrel_level) {
+    var piston_level = Barrel.Count - current_barrel_level - 1; // blocks
+    Piston.MaxLimit = piston_level * Me.CubeGrid.GridSize; // m
   }
 
   // NOTE: `SetPistonMaxLimit` first!
